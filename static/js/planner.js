@@ -469,10 +469,35 @@ function setupCalendarTouchGuard(calendarBody){
   }, {passive:true, capture:true});
 }
 
-function reportHeight(){
-  /* Завжди viewport — iframe = рівно екран, без темних полів Streamlit */
+function syncEmbedLayout(){
   const h = window.innerHeight;
-  try { window.parent.postMessage({type:'planner-resize', height:h}, '*'); } catch(e){}
+  const bg = currentThemeBg || '#1B2027';
+
+  try {
+    const frame = window.frameElement;
+    if (frame) {
+      frame.style.height = h + 'px';
+      frame.style.minHeight = h + 'px';
+      frame.style.display = 'block';
+      let node = frame.parentElement;
+      while (node) {
+        node.style.height = h + 'px';
+        node.style.minHeight = h + 'px';
+        node.style.maxHeight = h + 'px';
+        node.style.overflow = 'hidden';
+        node = node.parentElement;
+      }
+    }
+  } catch(e){}
+
+  try {
+    window.parent.postMessage({type:'planner-resize', height:h}, '*');
+    window.parent.postMessage({type:'planner-theme', bg}, '*');
+  } catch(e){}
+}
+
+function reportHeight(){
+  syncEmbedLayout();
 }
 
 /* VisualViewport API — рухаємо overlay вгору, коли iOS-клавіатура
@@ -565,6 +590,8 @@ function applyBgTheme(bg){
   try {
     window.parent.postMessage({type:'planner-theme', bg}, '*');
   } catch(e){}
+
+  syncEmbedLayout();
 }
 
 function buildThemePop(){
@@ -1150,6 +1177,9 @@ function initPlanner(){
   loadTheme();
   renderCalendar();
   reportHeight();
+  setTimeout(reportHeight, 50);
+  setTimeout(reportHeight, 300);
+  setTimeout(reportHeight, 1000);
 }
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPlanner);
