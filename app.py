@@ -22,11 +22,9 @@ def get_secrets() -> dict:
 
 
 def supabase_load(url: str, key: str, row_id: str) -> dict:
-    """Завантажити дані з Supabase або повернути дефолт."""
     default = {"theme": {"bg": "#1B2027"}, "months": {}}
     if not url or not key:
         return default
-
     headers = {
         "apikey": key,
         "Authorization": f"Bearer {key}",
@@ -85,94 +83,51 @@ def hide_streamlit_chrome():
     st.markdown(
         """
         <style>
-          html, body, .stApp, [data-testid="stAppViewContainer"], .main, section.main {
-            background-color: #1B2027 !important;
-            height: 100vh !important;
-            height: 100dvh !important;
-            min-height: 100vh !important;
-            overflow: hidden !important;
-            margin: 0 !important;
-            padding: 0 !important;
+          /* Прибираємо всі відступи Streamlit і розтягуємо на весь екран */
+          html, body { margin: 0; padding: 0; overflow: hidden; background: #1B2027; }
+          .stApp { background: #1B2027 !important; }
+          header[data-testid="stHeader"],
+          footer,
+          [data-testid="stToolbar"],
+          [data-testid="stDecoration"],
+          [data-testid="stStatusWidget"] {
+            display: none !important;
           }
-          header[data-testid="stHeader"] {display: none !important; height: 0 !important;}
-          footer, [data-testid="stToolbar"] {visibility: hidden !important; height: 0 !important;}
           .main .block-container {
             padding: 0 !important;
             max-width: 100% !important;
-            height: 100vh !important;
-            height: 100dvh !important;
-            min-height: 100vh !important;
-            display: flex !important;
-            flex-direction: column !important;
           }
-          [data-testid="stVerticalBlock"] {
-            gap: 0 !important;
-            flex: 1 !important;
-            min-height: 0 !important;
-            display: flex !important;
-            flex-direction: column !important;
-          }
-          [data-testid="stVerticalBlock"] > div {
-            flex: 1 !important;
-            min-height: 0 !important;
-            display: flex !important;
-            flex-direction: column !important;
-          }
-          [data-testid="stAlert"] {
-            margin: 0 !important;
-            border-radius: 0 !important;
-            flex-shrink: 0 !important;
-          }
-          [data-testid="stHtml"],
-          [data-testid="stHtml"] > div,
-          .stIFrame,
-          iframe[title="streamlit_components_v1"],
-          iframe {
-            flex: 1 !important;
-            width: 100% !important;
-            height: 100% !important;
-            min-height: 100vh !important;
-            min-height: 100dvh !important;
+          [data-testid="stVerticalBlock"] { gap: 0 !important; }
+          [data-testid="stAlert"] { margin: 0 !important; flex-shrink: 0; }
+
+          /* iframe — точно розмір вікна, без жодних рамок/відступів */
+          iframe[title="streamlit_components_v1"] {
             border: none !important;
             display: block !important;
-            overflow: hidden !important;
+            width: 100% !important;
+            height: 100vh !important;
           }
         </style>
         <script>
-          function applyParentTheme(bg) {
-            if (!bg) return;
-            var sel = '.stApp, [data-testid="stAppViewContainer"], .main, section.main, html, body';
-            document.querySelectorAll(sel).forEach(function(el) {
-              el.style.backgroundColor = bg;
-            });
-          }
-          function resizePlannerIframe(h) {
-            var vh = window.innerHeight;
-            var target = h && h > 0 ? Math.max(h, vh) : vh;
-            document.querySelectorAll('iframe').forEach(function(iframe) {
-              iframe.style.height = target + 'px';
-              iframe.style.minHeight = target + 'px';
-              var node = iframe.parentElement;
-              while (node) {
-                node.style.height = target + 'px';
-                node.style.minHeight = target + 'px';
-                node.style.maxHeight = target + 'px';
-                node.style.overflow = 'hidden';
-                if (node.classList && node.classList.contains('block-container')) break;
-                node = node.parentElement;
+          (function () {
+            function fit() {
+              var iframe = document.querySelector('iframe[title="streamlit_components_v1"]');
+              if (iframe) {
+                iframe.style.height = window.innerHeight + 'px';
+              }
+            }
+            window.addEventListener('resize', fit);
+            window.addEventListener('message', function (e) {
+              if (e.data && e.data.type === 'planner-theme') {
+                var bg = e.data.bg;
+                if (bg) document.documentElement.style.background = bg;
               }
             });
-          }
-          window.addEventListener('message', function(e) {
-            if (!e.data) return;
-            if (e.data.type === 'planner-resize') resizePlannerIframe(e.data.height);
-            if (e.data.type === 'planner-theme') applyParentTheme(e.data.bg);
-          });
-          window.addEventListener('resize', function() { resizePlannerIframe(window.innerHeight); });
-          resizePlannerIframe(window.innerHeight);
-          setTimeout(function() { resizePlannerIframe(window.innerHeight); }, 50);
-          setTimeout(function() { resizePlannerIframe(window.innerHeight); }, 300);
-          setTimeout(function() { resizePlannerIframe(window.innerHeight); }, 1000);
+            // Запускаємо після того як Streamlit вставить iframe
+            setTimeout(fit, 0);
+            setTimeout(fit, 200);
+            setTimeout(fit, 800);
+          })();
         </script>
         """,
         unsafe_allow_html=True,
@@ -212,7 +167,9 @@ def main():
         )
 
     html = build_planner_html(data, config)
-    components.html(html, height=900, scrolling=False)
+    # height=1 щоб Streamlit не додавав власну прокрутку;
+    # реальну висоту задає CSS та JS у батьківській сторінці
+    components.html(html, height=1, scrolling=False)
 
 
 if __name__ == "__main__":

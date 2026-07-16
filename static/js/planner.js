@@ -469,35 +469,10 @@ function setupCalendarTouchGuard(calendarBody){
   }, {passive:true, capture:true});
 }
 
-function syncEmbedLayout(){
-  const h = window.innerHeight;
-  const bg = currentThemeBg || '#1B2027';
-
-  try {
-    const frame = window.frameElement;
-    if (frame) {
-      frame.style.height = h + 'px';
-      frame.style.minHeight = h + 'px';
-      frame.style.display = 'block';
-      let node = frame.parentElement;
-      while (node) {
-        node.style.height = h + 'px';
-        node.style.minHeight = h + 'px';
-        node.style.maxHeight = h + 'px';
-        node.style.overflow = 'hidden';
-        node = node.parentElement;
-      }
-    }
-  } catch(e){}
-
-  try {
-    window.parent.postMessage({type:'planner-resize', height:h}, '*');
-    window.parent.postMessage({type:'planner-theme', bg}, '*');
-  } catch(e){}
-}
-
 function reportHeight(){
-  syncEmbedLayout();
+  try {
+    window.parent.postMessage({type:'planner-resize', height: window.innerHeight}, '*');
+  } catch(e){}
 }
 
 /* VisualViewport API — рухаємо overlay вгору, коли iOS-клавіатура
@@ -590,8 +565,6 @@ function applyBgTheme(bg){
   try {
     window.parent.postMessage({type:'planner-theme', bg}, '*');
   } catch(e){}
-
-  syncEmbedLayout();
 }
 
 function buildThemePop(){
