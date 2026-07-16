@@ -313,27 +313,35 @@ h1 .year{color:var(--muted);font-weight:500;}
   .weekdays div{font-size:10px;padding:6px 0;}
   .calendar-body{overflow-y:auto;-webkit-overflow-scrolling:touch;}
   .calendar-body.week-mode .weekdays{display:none;}
+  .week-scroll{display:none;}
+  .calendar-body.week-mode .week-scroll{display:block;}
+  .calendar-body.week-mode #grid{display:none;}
   .grid{
     flex:none;
     align-content:start;
     grid-template-rows:repeat(var(--weeks,5), auto);
   }
-  .grid.week-view{
+  .week-block{border-bottom:1px solid var(--line);}
+  .week-block-title{
+    padding:10px 12px 6px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;color:var(--muted);text-transform:lowercase;
+  }
+  .week-block-grid{
+    display:grid;
     grid-template-columns:repeat(2, 1fr);
-    grid-template-rows:auto;
-    grid-auto-rows:auto;
   }
   .cell{
     aspect-ratio:1;
     width:100%;
     padding:5px 4px;
   }
-  .grid.week-view .cell{
+  .week-block-grid .cell{
     min-height:calc((100vw - 12px) / 2);
   }
-  .grid.week-view .cell:nth-child(2n){border-right:none;}
+  .week-block-grid .cell:nth-child(2n){border-right:none;}
   .cell .datenum{font-size:12px;margin-bottom:3px;font-weight:500;}
-  .grid.week-view .cell .datenum{font-size:13px;}
+  .week-block-grid .cell .datenum{font-size:13px;}
   .cell-items{gap:2px;}
   .cell-item{
     font-size:10px;padding:3px 4px;border-radius:3px;
@@ -345,7 +353,7 @@ h1 .year{color:var(--muted);font-weight:500;}
     -webkit-box-orient:vertical;
     text-overflow:ellipsis;
   }
-  .grid.week-view .cell-item{
+  .week-block-grid .cell-item{
     font-size:11px;
     -webkit-line-clamp:4;
   }

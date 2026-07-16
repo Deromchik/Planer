@@ -25,6 +25,11 @@ let mobileViewMode  = 'week';
 let viewWeekAnchor  = null;
 let reassignState   = null;
 let suppressCellTap = false;
+const WEEKS_BEFORE = 8;
+const WEEKS_AFTER = 16;
+const WEEKS_LOAD_MORE = 6;
+let weekScrollNeedsRebuild = true;
+let weekScrollTimer = null;
 
 function isMobile(){ return window.matchMedia('(max-width:768px)').matches; }
 
@@ -46,6 +51,185 @@ function syncWeekAnchor(){
 
 function isWeekView(){
   return isMobile() && mobileViewMode === 'week';
+}
+
+function formatWeekTitlePlain(start){
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const sy = start.getFullYear();
+  const ey = end.getFullYear();
+  const sm = start.getMonth();
+  const em = end.getMonth();
+  if(sm === em && sy === ey){
+    return start.getDate() + '–' + end.getDate() + ' ' + MONTH_NAMES[sm].toLowerCase() + ' ' + sy;
+  }
+  if(sy === ey){
+    return start.getDate() + ' ' + MONTH_NAMES[sm].toLowerCase() + ' – ' +
+      end.getDate() + ' ' + MONTH_NAMES[em].toLowerCase() + ' ' + sy;
+  }
+  return start.getDate() + '.' + pad(sm + 1) + '.' + sy + ' – ' +
+    end.getDate() + '.' + pad(em + 1) + '.' + ey;
+}
+
+function fillWeekBlockGrid(grid, weekMonday){
+  grid.innerHTML = '';
+  for(let i=0; i<7; i++){
+    const d = new Date(weekMonday);
+    d.setDate(d.getDate() + i);
+    loadMonth(d.getFullYear(), d.getMonth());
+    grid.appendChild(createCalendarCell({
+      y: d.getFullYear(), m: d.getMonth(), d: d.getDate()
+    }, false));
+  }
+}
+
+function createWeekBlock(weekMonday){
+  const block = document.createElement('section');
+  block.className = 'week-block';
+  block.dataset.weekTs = String(weekMonday.getTime());
+
+  const header = document.createElement('div');
+  header.className = 'week-block-title';
+  header.textContent = formatWeekTitlePlain(weekMonday);
+
+  const grid = document.createElement('div');
+  grid.className = 'week-block-grid';
+  fillWeekBlockGrid(grid, weekMonday);
+
+  block.append(header, grid);
+  return block;
+}
+
+function refreshWeekBlock(block){
+  const monday = new Date(+block.dataset.weekTs);
+  const title = block.querySelector('.week-block-title');
+  if(title) title.textContent = formatWeekTitlePlain(monday);
+  const grid = block.querySelector('.week-block-grid');
+  if(grid) fillWeekBlockGrid(grid, monday);
+}
+
+function refreshWeekScroll(){
+  document.querySelectorAll('#weekScroll .week-block').forEach(refreshWeekBlock);
+}
+
+function getWeekBlockScrollTop(block){
+  const weekScroll = document.getElementById('weekScroll');
+  if(!block || !weekScroll) return 0;
+  return Math.max(0, weekScroll.offsetTop + block.offsetTop - 4);
+}
+
+function scrollToWeekAnchor(){
+  const container = document.getElementById('weekScroll');
+  const calendarBody = document.querySelector('.calendar-body');
+  if(!container || !calendarBody || !viewWeekAnchor) return;
+  const block = container.querySelector('.week-block[data-week-ts="' + viewWeekAnchor.getTime() + '"]');
+  if(block) calendarBody.scrollTop = getWeekBlockScrollTop(block);
+}
+
+function renderWeekScroll(container){
+  syncWeekAnchor();
+  const anchor = new Date(viewWeekAnchor);
+  container.innerHTML = '';
+
+  const startMonday = new Date(anchor);
+  startMonday.setDate(startMonday.getDate() - WEEKS_BEFORE * 7);
+
+  for(let w=0; w <= WEEKS_BEFORE + WEEKS_AFTER; w++){
+    const weekMonday = new Date(startMonday);
+    weekMonday.setDate(weekMonday.getDate() + w * 7);
+    container.appendChild(createWeekBlock(weekMonday));
+  }
+
+  requestAnimationFrame(scrollToWeekAnchor);
+}
+
+function updateActiveWeekFromScroll(){
+  const calendarBody = document.querySelector('.calendar-body');
+  const blocks = document.querySelectorAll('#weekScroll .week-block');
+  if(!calendarBody || !blocks.length) return;
+
+  const marker = calendarBody.scrollTop + calendarBody.clientHeight * 0.25;
+  const weekScrollTop = document.getElementById('weekScroll')?.offsetTop || 0;
+  let active = blocks[0];
+  blocks.forEach(block=>{
+    if(weekScrollTop + block.offsetTop <= marker) active = block;
+  });
+
+  const monday = new Date(+active.dataset.weekTs);
+  viewWeekAnchor = monday;
+  viewYear = monday.getFullYear();
+  viewMonth = monday.getMonth();
+  document.getElementById('monthTitle').innerHTML = formatWeekTitle(monday);
+}
+
+function appendWeekBlocks(count){
+  const container = document.getElementById('weekScroll');
+  const blocks = container?.querySelectorAll('.week-block');
+  const last = blocks?.[blocks.length - 1];
+  if(!container || !last) return;
+
+  let monday = new Date(+last.dataset.weekTs);
+  for(let i=0; i<count; i++){
+    monday = new Date(monday);
+    monday.setDate(monday.getDate() + 7);
+    container.appendChild(createWeekBlock(monday));
+  }
+  reportHeight();
+}
+
+function prependWeekBlocks(count){
+  const container = document.getElementById('weekScroll');
+  const calendarBody = document.querySelector('.calendar-body');
+  const first = container?.querySelector('.week-block');
+  if(!container || !calendarBody || !first) return;
+
+  const scrollBefore = calendarBody.scrollTop;
+  const heightBefore = container.offsetHeight;
+  const firstMonday = new Date(+first.dataset.weekTs);
+  const frag = document.createDocumentFragment();
+
+  for(let i=count; i>=1; i--){
+    const w = new Date(firstMonday);
+    w.setDate(w.getDate() - i * 7);
+    frag.appendChild(createWeekBlock(w));
+  }
+  container.insertBefore(frag, first);
+  calendarBody.scrollTop = scrollBefore + (container.offsetHeight - heightBefore);
+  reportHeight();
+}
+
+function maybeLoadMoreWeeks(){
+  const calendarBody = document.querySelector('.calendar-body');
+  const container = document.getElementById('weekScroll');
+  if(!calendarBody || !container) return;
+
+  const distBottom = container.offsetHeight - (calendarBody.scrollTop + calendarBody.clientHeight);
+  if(distBottom < 500) appendWeekBlocks(WEEKS_LOAD_MORE);
+  if(calendarBody.scrollTop < 500) prependWeekBlocks(WEEKS_LOAD_MORE);
+}
+
+function onWeekScroll(){
+  if(!isWeekView()) return;
+  clearTimeout(weekScrollTimer);
+  weekScrollTimer = setTimeout(()=>{
+    updateActiveWeekFromScroll();
+    maybeLoadMoreWeeks();
+  }, 60);
+}
+
+function navigateToWeek(monday){
+  viewWeekAnchor = new Date(monday);
+  viewYear = viewWeekAnchor.getFullYear();
+  viewMonth = viewWeekAnchor.getMonth();
+  document.getElementById('monthTitle').innerHTML = formatWeekTitle(viewWeekAnchor);
+
+  const block = document.querySelector('#weekScroll .week-block[data-week-ts="' + viewWeekAnchor.getTime() + '"]');
+  if(block){
+    document.querySelector('.calendar-body').scrollTop = getWeekBlockScrollTop(block);
+    return;
+  }
+  weekScrollNeedsRebuild = true;
+  renderCalendar();
 }
 
 function formatWeekTitle(start){
@@ -83,6 +267,7 @@ function setMobileViewMode(mode){
   if(reassignState) cancelReassign();
   if(mode === 'week'){
     syncWeekAnchor();
+    weekScrollNeedsRebuild = true;
   } else if(viewWeekAnchor){
     viewYear = viewWeekAnchor.getFullYear();
     viewMonth = viewWeekAnchor.getMonth();
@@ -514,27 +699,6 @@ function clearDropTargets(){
 }
 
 /* ───────────── calendar render ───────────── */
-function renderWeekGrid(grid){
-  syncWeekAnchor();
-  for(let i=0; i<7; i++){
-    const d = new Date(viewWeekAnchor);
-    d.setDate(d.getDate() + i);
-    loadMonth(d.getFullYear(), d.getMonth());
-  }
-  grid.classList.add('week-view');
-  grid.style.setProperty('--weeks', 1);
-
-  for(let i=0; i<7; i++){
-    const d = new Date(viewWeekAnchor);
-    d.setDate(d.getDate() + i);
-    const cy = d.getFullYear();
-    const cm = d.getMonth();
-    const dayNum = d.getDate();
-    const isOutside = cm !== viewMonth;
-    grid.appendChild(createCalendarCell({y:cy, m:cm, d:dayNum}, isOutside));
-  }
-}
-
 function renderMonthGrid(grid){
   grid.classList.remove('week-view');
   const firstWeekday=(new Date(viewYear,viewMonth,1).getDay()+6)%7;
@@ -560,21 +724,35 @@ function renderMonthGrid(grid){
 
 function renderCalendar(){
   updateViewToggle();
-  if(isWeekView()) syncWeekAnchor();
+  const calendarBody = document.querySelector('.calendar-body');
+  const grid = document.getElementById('grid');
+  const weekScroll = document.getElementById('weekScroll');
 
-  loadMonth(viewYear, viewMonth);
-  const titleEl = document.getElementById('monthTitle');
   if(isWeekView()){
-    titleEl.innerHTML = formatWeekTitle(viewWeekAnchor);
-  } else {
-    titleEl.innerHTML = MONTH_NAMES[viewMonth]+' <span class="year">'+viewYear+'</span>';
-  }
+    syncWeekAnchor();
+    loadMonth(viewYear, viewMonth);
+    document.getElementById('monthTitle').innerHTML = formatWeekTitle(viewWeekAnchor);
+    calendarBody?.classList.add('week-mode');
+    if(grid) grid.innerHTML = '';
 
-  const grid=document.getElementById('grid');
-  grid.innerHTML='';
-  document.querySelector('.calendar-body')?.classList.toggle('week-mode', isWeekView());
-  if(isWeekView()) renderWeekGrid(grid);
-  else renderMonthGrid(grid);
+    if(weekScrollNeedsRebuild || !weekScroll?.childElementCount){
+      if(weekScroll) renderWeekScroll(weekScroll);
+      weekScrollNeedsRebuild = false;
+    } else {
+      refreshWeekScroll();
+    }
+  } else {
+    calendarBody?.classList.remove('week-mode');
+    if(weekScroll) weekScroll.innerHTML = '';
+    weekScrollNeedsRebuild = true;
+    loadMonth(viewYear, viewMonth);
+    document.getElementById('monthTitle').innerHTML =
+      MONTH_NAMES[viewMonth]+' <span class="year">'+viewYear+'</span>';
+    if(grid){
+      grid.innerHTML = '';
+      renderMonthGrid(grid);
+    }
+  }
   reportHeight();
 }
 
@@ -586,8 +764,8 @@ function openPanel(y,m,d){
   document.getElementById('panelDate').textContent=d+' '+MONTH_NAMES[m].toLowerCase()+' '+y;
   document.getElementById('panelWeekday').textContent=WEEKDAY_NAMES[dateObj.getDay()];
   document.querySelector('.panel-hint').textContent = isMobile()
-    ? 'Натисни текст запису, щоб редагувати. ↗ — перенести на інший день. Свайп — змінити ' +
-      (isWeekView() ? 'тиждень' : 'місяць') + '.'
+    ? 'Натисни текст запису, щоб редагувати. ↗ — перенести на інший день. ' +
+      (isWeekView() ? 'Скрол — інші тижні.' : 'Свайп — змінити місяць.')
     : 'Натисни текст запису, щоб редагувати. Перетягни блок на потрібний день у календарі.';
   renderPanelContent();
   document.getElementById('overlay').classList.add('open');
@@ -751,13 +929,13 @@ function prevPeriod(){
   if(reassignState) cancelReassign();
   if(isWeekView()){
     syncWeekAnchor();
-    viewWeekAnchor.setDate(viewWeekAnchor.getDate() - 7);
-    viewYear = viewWeekAnchor.getFullYear();
-    viewMonth = viewWeekAnchor.getMonth();
-  } else {
-    viewMonth--;
-    if(viewMonth<0){viewMonth=11;viewYear--;}
+    const prev = new Date(viewWeekAnchor);
+    prev.setDate(prev.getDate() - 7);
+    navigateToWeek(prev);
+    return;
   }
+  viewMonth--;
+  if(viewMonth<0){viewMonth=11;viewYear--;}
   renderCalendar();
 }
 
@@ -765,13 +943,13 @@ function nextPeriod(){
   if(reassignState) cancelReassign();
   if(isWeekView()){
     syncWeekAnchor();
-    viewWeekAnchor.setDate(viewWeekAnchor.getDate() + 7);
-    viewYear = viewWeekAnchor.getFullYear();
-    viewMonth = viewWeekAnchor.getMonth();
-  } else {
-    viewMonth++;
-    if(viewMonth>11){viewMonth=0;viewYear++;}
+    const next = new Date(viewWeekAnchor);
+    next.setDate(next.getDate() + 7);
+    navigateToWeek(next);
+    return;
   }
+  viewMonth++;
+  if(viewMonth>11){viewMonth=0;viewYear++;}
   renderCalendar();
 }
 
@@ -779,7 +957,12 @@ function goToday(){
   if(reassignState) cancelReassign();
   viewYear=today.getFullYear();
   viewMonth=today.getMonth();
-  if(isWeekView()) viewWeekAnchor = getMonday(today.getFullYear(), today.getMonth(), today.getDate());
+  if(isWeekView()){
+    weekScrollNeedsRebuild = true;
+    viewWeekAnchor = getMonday(today.getFullYear(), today.getMonth(), today.getDate());
+    renderCalendar();
+    return;
+  }
   renderCalendar();
 }
 
@@ -812,20 +995,21 @@ function bindEvents(){
   });
 
   const calendarBody = document.querySelector('.calendar-body');
+  calendarBody.addEventListener('scroll', onWeekScroll, {passive:true});
   calendarBody.addEventListener('touchstart', e=>{
-    if(e.touches.length!==1 || reassignState) return;
+    if(e.touches.length!==1 || reassignState || isWeekView()) return;
     swipeStartX = e.touches[0].clientX;
     swipeStartY = e.touches[0].clientY;
     suppressCellTap = false;
   }, {passive:true});
   calendarBody.addEventListener('touchmove', e=>{
-    if(swipeStartX===null || reassignState) return;
+    if(swipeStartX===null || reassignState || isWeekView()) return;
     const dx = Math.abs(e.touches[0].clientX - swipeStartX);
     const dy = Math.abs(e.touches[0].clientY - swipeStartY);
     if(dx > 12 || dy > 12) suppressCellTap = true;
   }, {passive:true});
   calendarBody.addEventListener('touchend', e=>{
-    if(swipeStartX===null || reassignState) { swipeStartX=null; return; }
+    if(swipeStartX===null || reassignState || isWeekView()) { swipeStartX=null; return; }
     const t = e.changedTouches[0];
     const dx = t.clientX - swipeStartX;
     const dy = Math.abs(t.clientY - swipeStartY);
