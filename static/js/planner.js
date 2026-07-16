@@ -308,11 +308,13 @@ function updateReassignBar(){
   if(!reassignState){
     bar?.classList.remove('open');
     app?.classList.remove('reassign-mode');
+    updateMobileHeaderHeight();
     return;
   }
   bar?.classList.add('open');
   app?.classList.add('reassign-mode');
   if(text) text.textContent = 'Оберіть день для «' + reassignState.itemText + '»';
+  updateMobileHeaderHeight();
 }
 
 function handleReassignClick(cellDate){
@@ -470,7 +472,8 @@ function setupCalendarTouchGuard(calendarBody){
 }
 
 function reportHeight(){
-  const h = (isMobile() && isWeekView())
+  updateMobileHeaderHeight();
+  const h = isMobile()
     ? window.innerHeight
     : Math.max(
         document.documentElement.scrollHeight,
@@ -478,6 +481,20 @@ function reportHeight(){
         window.innerHeight
       );
   try { window.parent.postMessage({type:'planner-resize', height:h}, '*'); } catch(e){}
+}
+
+function updateMobileHeaderHeight(){
+  if(!isMobile()) return;
+  const header = document.querySelector('.app-header');
+  const h = header?.offsetHeight || 118;
+  document.documentElement.style.setProperty('--mobile-header-h', h + 'px');
+}
+
+function resetMobileScroll(){
+  if(!isMobile()) return;
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
 }
 
 /* ───────────── utils ───────────── */
@@ -824,10 +841,9 @@ function renderCalendar(){
       renderMonthGrid(grid);
     }
   }
+  resetMobileScroll();
   reportHeight();
 }
-
-/* ───────────── side panel ───────────── */
 function openPanel(y,m,d){
   loadMonth(y,m);
   selectedDateKey={y,m,d};
@@ -840,6 +856,7 @@ function openPanel(y,m,d){
     : 'Натисни текст запису, щоб редагувати. Перетягни блок на потрібний день у календарі.';
   renderPanelContent();
   document.getElementById('overlay').classList.add('open');
+  resetMobileScroll();
   reportHeight();
 }
 
@@ -1041,6 +1058,7 @@ function closePanel(){
   closeColorPop();
   closeThemePop();
   document.getElementById('overlay').classList.remove('open');
+  resetMobileScroll();
   reportHeight();
 }
 
