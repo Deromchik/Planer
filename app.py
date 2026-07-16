@@ -98,15 +98,24 @@ def hide_streamlit_chrome():
           iframe[title="streamlit_components_v1"] {
             border: none;
             width: 100% !important;
+            height: 100vh !important;
+            height: 100dvh !important;
             min-height: 100vh !important;
             display: block;
+            overflow: hidden;
           }
         </style>
         <script>
           function resizePlannerIframe(h) {
             var iframe = document.querySelector('iframe[title="streamlit_components_v1"]');
             if (!iframe) return;
-            var minH = Math.max(h || 0, window.innerHeight);
+            /* На мобільному plannerjs завжди надсилає innerHeight,
+               тому iframe ніколи не виходить за межі екрана.
+               На десктопі дозволяємо рости під контент.           */
+            var isMobile = window.innerWidth <= 768;
+            var minH = isMobile
+              ? window.innerHeight
+              : Math.max(h || 0, window.innerHeight);
             iframe.style.height = minH + 'px';
           }
           window.addEventListener('message', function(e) {
@@ -157,7 +166,7 @@ def main():
         )
 
     html = build_planner_html(data, config)
-    components.html(html, height=1200, scrolling=False)
+    components.html(html, height=800, scrolling=False)
 
 
 if __name__ == "__main__":

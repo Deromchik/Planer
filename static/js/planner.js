@@ -308,13 +308,11 @@ function updateReassignBar(){
   if(!reassignState){
     bar?.classList.remove('open');
     app?.classList.remove('reassign-mode');
-    updateMobileHeaderHeight();
     return;
   }
   bar?.classList.add('open');
   app?.classList.add('reassign-mode');
   if(text) text.textContent = 'Оберіть день для «' + reassignState.itemText + '»';
-  updateMobileHeaderHeight();
 }
 
 function handleReassignClick(cellDate){
@@ -471,8 +469,10 @@ function setupCalendarTouchGuard(calendarBody){
   }, {passive:true, capture:true});
 }
 
+/* Завжди посилаємо innerHeight на мобільному — iframe не росте
+   понад viewport, тому Streamlit-батько ніколи не стає прокрутним,
+   а position:fixed / flex-layout всередині iframe не ламається.   */
 function reportHeight(){
-  updateMobileHeaderHeight();
   const h = isMobile()
     ? window.innerHeight
     : Math.max(
@@ -483,18 +483,29 @@ function reportHeight(){
   try { window.parent.postMessage({type:'planner-resize', height:h}, '*'); } catch(e){}
 }
 
-function updateMobileHeaderHeight(){
-  if(!isMobile()) return;
-  const header = document.querySelector('.app-header');
-  const h = header?.offsetHeight || 118;
-  document.documentElement.style.setProperty('--mobile-header-h', h + 'px');
+/* VisualViewport API — рухаємо overlay вгору, коли iOS-клавіатура
+   зменшує видиму область. Без цього нижня частина панелі ховається
+   під клавіатурою.                                                  */
+function setupVisualViewport(){
+  if(!isMobile() || !window.visualViewport) return;
+  const overlay = document.getElementById('overlay');
+  window.visualViewport.addEventListener('resize', ()=>{
+    if(!overlay.classList.contains('open')) return;
+    const vvh = window.visualViewport.height;
+    const vvOff = window.visualViewport.offsetTop;
+    overlay.style.top    = vvOff + 'px';
+    overlay.style.height = vvh   + 'px';
+  });
+  window.visualViewport.addEventListener('scroll', ()=>{
+    if(!overlay.classList.contains('open')) return;
+    overlay.style.top = window.visualViewport.offsetTop + 'px';
+  });
 }
 
-function resetMobileScroll(){
-  if(!isMobile()) return;
-  window.scrollTo(0, 0);
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
+function resetOverlaySize(){
+  const overlay = document.getElementById('overlay');
+  overlay.style.top    = '';
+  overlay.style.height = '';
 }
 
 /* ───────────── utils ───────────── */
@@ -841,9 +852,9 @@ function renderCalendar(){
       renderMonthGrid(grid);
     }
   }
-  resetMobileScroll();
   reportHeight();
 }
+
 function openPanel(y,m,d){
   loadMonth(y,m);
   selectedDateKey={y,m,d};
@@ -856,7 +867,6 @@ function openPanel(y,m,d){
     : 'Натисни текст запису, щоб редагувати. Перетягни блок на потрібний день у календарі.';
   renderPanelContent();
   document.getElementById('overlay').classList.add('open');
-  resetMobileScroll();
   reportHeight();
 }
 
@@ -1058,7 +1068,7 @@ function closePanel(){
   closeColorPop();
   closeThemePop();
   document.getElementById('overlay').classList.remove('open');
-  resetMobileScroll();
+  resetOverlaySize();
   reportHeight();
 }
 
@@ -1137,11 +1147,10 @@ function initPlanner(){
   for(const k of Object.keys(allMonths)) monthCache[k] = migrateMonthData(allMonths[k]);
 
   bindEvents();
+  setupVisualViewport();
   loadTheme();
   renderCalendar();
   reportHeight();
-  setTimeout(reportHeight, 100);
-  setTimeout(reportHeight, 500);
 }
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPlanner);

@@ -11,17 +11,16 @@
   --coral:#C1666B;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;margin:0;}
+html,body{height:100%;margin:0;overflow:hidden;}
 body{
   background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;
-  overflow:hidden;touch-action:manipulation;
-  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  touch-action:manipulation;
 }
 
 .app{
   display:flex;flex-direction:column;
   height:100vh;height:100dvh;width:100%;
-  max-height:100dvh;overflow:hidden;
+  overflow:hidden;
 }
 
 .app-header{flex-shrink:0;z-index:45;}
@@ -97,7 +96,7 @@ h1 .year{color:var(--muted);font-weight:500;}
 }
 .save-status.show{opacity:1;color:var(--teal);}
 
-.calendar-body{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.calendar-body{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative;}
 .weekdays{
   display:grid;grid-template-columns:repeat(7,1fr);
   flex-shrink:0;border-bottom:1px solid var(--line);
@@ -296,23 +295,21 @@ h1 .year{color:var(--muted);font-weight:500;}
 @media(max-width:768px){
   .mobile-only{display:flex;}
 
-  html,body{
-    position:fixed;width:100%;height:100%;overflow:hidden;
-  }
+  html,body{overflow:hidden;height:100%;width:100%;}
 
+  /* Header — звичайний flex-child, БЕЗ position:fixed
+     Це єдиний спосіб залишатись на місці всередині iframe    */
   .app-header{
-    position:fixed;top:0;left:0;right:0;
+    flex-shrink:0;
     z-index:45;
     background:var(--bg);
     border-bottom:1px solid var(--line);
-    padding-top:env(safe-area-inset-top);
   }
 
   .calendar-body{
-    margin-top:var(--mobile-header-h, 118px);
-    height:calc(100dvh - var(--mobile-header-h, 118px));
-    max-height:calc(100dvh - var(--mobile-header-h, 118px));
-    overflow-y:auto;-webkit-overflow-scrolling:touch;
+    /* flex:1 та min-height:0 успадковуються з базових стилів */
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
     overscroll-behavior:contain;
     touch-action:pan-y;
   }
@@ -323,9 +320,7 @@ h1 .year{color:var(--muted);font-weight:500;}
     border-bottom:none;
   }
   .month-nav{justify-content:center;}
-  .month-nav button{
-    width:44px;height:44px;font-size:20px;
-  }
+  .month-nav button{width:44px;height:44px;font-size:20px;}
   h1{font-size:20px;}
   .actions{
     justify-content:center;gap:6px;flex-wrap:nowrap;
@@ -398,8 +393,10 @@ h1 .year{color:var(--muted);font-weight:500;}
     width:100%;max-width:100%;
     border-left:none;border-top:1px solid var(--line);
     border-radius:16px 16px 0 0;
-    max-height:88vh;
-    padding:12px 16px calc(80px + env(safe-area-inset-bottom));
+    /* Висота панелі прив'язана до visualViewport через JS,
+       щоб не перекривалась клавіатурою на iOS               */
+    max-height:88dvh;
+    padding:12px 16px calc(72px + env(safe-area-inset-bottom));
     animation:slideup .22s ease-out;
   }
   .panel-handle{display:block;}
