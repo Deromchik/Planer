@@ -86,14 +86,28 @@ def hide_streamlit_chrome():
     st.markdown(
         """
         <style>
-          .stApp, [data-testid="stAppViewContainer"], .main, section.main {
+          html, body, .stApp, [data-testid="stAppViewContainer"], .main, section.main {
             background-color: #1B2027 !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            min-height: 100vh !important;
+            overflow: hidden !important;
           }
           header[data-testid="stHeader"] {display: none !important; height: 0 !important;}
-          footer {visibility: hidden;}
+          footer {visibility: hidden; height: 0 !important;}
           .block-container {
             padding: 0 !important;
             max-width: 100% !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            min-height: 100vh !important;
+          }
+          [data-testid="stVerticalBlock"] {
+            gap: 0 !important;
+          }
+          [data-testid="stAlert"] {
+            margin: 0 !important;
+            border-radius: 0 !important;
           }
           iframe[title="streamlit_components_v1"] {
             border: none;
@@ -106,27 +120,27 @@ def hide_streamlit_chrome():
           }
         </style>
         <script>
-          function resizePlannerIframe(h) {
+          function applyParentTheme(bg) {
+            if (!bg) return;
+            var sel = '.stApp, [data-testid="stAppViewContainer"], .main, section.main, html, body';
+            document.querySelectorAll(sel).forEach(function(el) {
+              el.style.backgroundColor = bg;
+            });
+          }
+          function resizePlannerIframe() {
             var iframe = document.querySelector('iframe[title="streamlit_components_v1"]');
             if (!iframe) return;
-            /* На мобільному plannerjs завжди надсилає innerHeight,
-               тому iframe ніколи не виходить за межі екрана.
-               На десктопі дозволяємо рости під контент.           */
-            var isMobile = window.innerWidth <= 768;
-            var minH = isMobile
-              ? window.innerHeight
-              : Math.max(h || 0, window.innerHeight);
-            iframe.style.height = minH + 'px';
+            iframe.style.height = window.innerHeight + 'px';
           }
           window.addEventListener('message', function(e) {
-            if (e.data && e.data.type === 'planner-resize') {
-              resizePlannerIframe(e.data.height);
-            }
+            if (!e.data) return;
+            if (e.data.type === 'planner-resize') resizePlannerIframe();
+            if (e.data.type === 'planner-theme') applyParentTheme(e.data.bg);
           });
-          window.addEventListener('resize', function() {
-            resizePlannerIframe(window.innerHeight);
-          });
-          resizePlannerIframe(window.innerHeight);
+          window.addEventListener('resize', resizePlannerIframe);
+          resizePlannerIframe();
+          setTimeout(resizePlannerIframe, 100);
+          setTimeout(resizePlannerIframe, 500);
         </script>
         """,
         unsafe_allow_html=True,
@@ -166,7 +180,7 @@ def main():
         )
 
     html = build_planner_html(data, config)
-    components.html(html, height=800, scrolling=False)
+    components.html(html, height=700, scrolling=False)
 
 
 if __name__ == "__main__":

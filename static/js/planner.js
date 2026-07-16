@@ -469,17 +469,9 @@ function setupCalendarTouchGuard(calendarBody){
   }, {passive:true, capture:true});
 }
 
-/* Завжди посилаємо innerHeight на мобільному — iframe не росте
-   понад viewport, тому Streamlit-батько ніколи не стає прокрутним,
-   а position:fixed / flex-layout всередині iframe не ламається.   */
 function reportHeight(){
-  const h = isMobile()
-    ? window.innerHeight
-    : Math.max(
-        document.documentElement.scrollHeight,
-        document.documentElement.clientHeight,
-        window.innerHeight
-      );
+  /* Завжди viewport — iframe = рівно екран, без темних полів Streamlit */
+  const h = window.innerHeight;
   try { window.parent.postMessage({type:'planner-resize', height:h}, '*'); } catch(e){}
 }
 
@@ -566,6 +558,13 @@ function applyBgTheme(bg){
     custom.closest('.swatch').classList.toggle('active', isCustom);
     custom.value = bg;
   }
+
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.content = bg;
+
+  try {
+    window.parent.postMessage({type:'planner-theme', bg}, '*');
+  } catch(e){}
 }
 
 function buildThemePop(){
