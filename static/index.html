@@ -20,6 +20,10 @@
       <button type="button" id="nextBtn" title="Наступний місяць">›</button>
     </div>
     <div class="actions">
+      <div class="view-toggle mobile-only" id="viewToggle">
+        <button type="button" class="view-btn active" data-view="week">Тиждень</button>
+        <button type="button" class="view-btn" data-view="month">Місяць</button>
+      </div>
       <button type="button" class="theme-btn" id="themeBtn" title="Колір календаря">
         <span class="theme-btn-dot" id="themeBtnDot"></span>
         Тема
@@ -27,6 +31,10 @@
       <span class="save-status" id="saveStatus">Збережено</span>
       <button type="button" class="pill-btn" id="todayBtn">Сьогодні</button>
     </div>
+  </div>
+  <div class="reassign-bar" id="reassignBar">
+    <span class="reassign-text" id="reassignText"></span>
+    <button type="button" class="reassign-cancel" id="reassignCancel">Скасувати</button>
   </div>
   <div class="calendar-body">
     <div class="weekdays">

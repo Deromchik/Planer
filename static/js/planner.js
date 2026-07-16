@@ -17,18 +17,175 @@ let dragState       = null;
 let justDropped     = false;
 let currentThemeBg  = THEME_COLORS[0];
 let colorPopCtx     = null;
-let touchDrag       = null;
 let swipeStartX     = null;
 let swipeStartY     = null;
 let popOpenedAt     = 0;
+let mobileViewMode  = 'week';
+let viewWeekAnchor  = null;
+let reassignState   = null;
 
 function isMobile(){ return window.matchMedia('(max-width:768px)').matches; }
+
+function getMonday(y, m, d){
+  const date = new Date(y, m, d);
+  const offset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - offset);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function syncWeekAnchor(){
+  const anchorDay = selectedDateKey?.d || (
+    viewYear === today.getFullYear() && viewMonth === today.getMonth()
+      ? today.getDate() : 1
+  );
+  viewWeekAnchor = getMonday(viewYear, viewMonth, anchorDay);
+}
+
+function isWeekView(){
+  return isMobile() && mobileViewMode === 'week';
+}
+
+function formatWeekTitle(start){
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const sy = start.getFullYear();
+  const ey = end.getFullYear();
+  const sm = start.getMonth();
+  const em = end.getMonth();
+  if(sm === em && sy === ey){
+    return start.getDate() + '–' + end.getDate() + ' ' + MONTH_NAMES[sm].toLowerCase() +
+      ' <span class="year">' + sy + '</span>';
+  }
+  if(sy === ey){
+    return start.getDate() + ' ' + MONTH_NAMES[sm].toLowerCase() + ' – ' +
+      end.getDate() + ' ' + MONTH_NAMES[em].toLowerCase() +
+      ' <span class="year">' + sy + '</span>';
+  }
+  return start.getDate() + '.' + pad(sm + 1) + '.' + sy + ' – ' +
+    end.getDate() + '.' + pad(em + 1) + '.' + ey;
+}
+
+function updateViewToggle(){
+  const toggle = document.getElementById('viewToggle');
+  if(!toggle) return;
+  toggle.style.display = isMobile() ? 'flex' : 'none';
+  toggle.querySelectorAll('.view-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.view === mobileViewMode);
+  });
+}
+
+function setMobileViewMode(mode){
+  if(!isMobile()) return;
+  if(mobileViewMode === mode) return;
+  if(reassignState) cancelReassign();
+  if(mode === 'week'){
+    syncWeekAnchor();
+  } else if(viewWeekAnchor){
+    viewYear = viewWeekAnchor.getFullYear();
+    viewMonth = viewWeekAnchor.getMonth();
+  }
+  mobileViewMode = mode;
+  updateViewToggle();
+  renderCalendar();
+}
+
+function startReassign(fromKey, itemId, itemText){
+  reassignState = { fromKey, itemId, itemText };
+  closePanel();
+  updateReassignBar();
+  renderCalendar();
+}
+
+function cancelReassign(){
+  reassignState = null;
+  updateReassignBar();
+  renderCalendar();
+}
+
+function updateReassignBar(){
+  const bar = document.getElementById('reassignBar');
+  const text = document.getElementById('reassignText');
+  const app = document.querySelector('.app');
+  if(!reassignState){
+    bar?.classList.remove('open');
+    app?.classList.remove('reassign-mode');
+    return;
+  }
+  bar?.classList.add('open');
+  app?.classList.add('reassign-mode');
+  if(text) text.textContent = 'Оберіть день для «' + reassignState.itemText + '»';
+}
+
+function handleReassignClick(cellDate){
+  if(!reassignState) return false;
+  const sameDay = reassignState.fromKey.y === cellDate.y &&
+    reassignState.fromKey.m === cellDate.m &&
+    reassignState.fromKey.d === cellDate.d;
+  if(!sameDay) moveItem(reassignState.fromKey, cellDate, reassignState.itemId);
+  reassignState = null;
+  updateReassignBar();
+  renderCalendar();
+  return true;
+}
 
 function cellDateFromEl(cell){
   if(!cell) return null;
   const y=+cell.dataset.y, m=+cell.dataset.m, d=+cell.dataset.d;
   if(Number.isNaN(y)) return null;
   return {y,m,d};
+}
+
+function createCalendarCell(cellDate, isOutside){
+  const {y:cy, m:cm, d:dayNum} = cellDate;
+  const cell=document.createElement('div');
+  cell.className='cell'+(isOutside?' outside':'');
+  cell.dataset.y=cy; cell.dataset.m=cm; cell.dataset.d=dayNum;
+  if(cy===today.getFullYear()&&cm===today.getMonth()&&dayNum===today.getDate())
+    cell.className+=' today';
+  if(reassignState && isMobile()) cell.classList.add('reassign-target');
+
+  const num=document.createElement('div');
+  num.className='datenum'; num.textContent=dayNum;
+  cell.appendChild(num);
+
+  const wrap=document.createElement('div');
+  wrap.className='cell-items';
+  getDayData(cy,cm,dayNum).items.forEach(item=>{
+    const block=document.createElement('div');
+    block.className='cell-item'+(item.done?' done':'');
+    block.textContent=item.text;
+    block.style.background=item.color||ITEM_COLORS[0];
+    block.style.color=textOnBg(item.color||ITEM_COLORS[0]);
+    block.title=item.text;
+    block.addEventListener('click',e=>e.stopPropagation());
+    if(!isMobile()){
+      block.draggable=true;
+      block.addEventListener('dragstart',e=>{
+        dragState={fromKey:cellDate,itemId:item.id};
+        block.classList.add('dragging');
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setData('text/plain',item.id);
+      });
+      block.addEventListener('dragend',()=>{
+        block.classList.remove('dragging');
+        clearDropTargets();
+        if(dragState) dragState=null;
+      });
+    }
+    wrap.appendChild(block);
+  });
+  cell.appendChild(wrap);
+
+  cell.addEventListener('click',()=>{
+    if(reassignState && isMobile()){
+      handleReassignClick(cellDate);
+      return;
+    }
+    if(!justDropped && !dragState) openPanel(cy,cm,dayNum);
+  });
+  if(!isMobile()) setupCellDrop(cell, cellDate);
+  return cell;
 }
 
 /* iOS: click інколи не спрацьовує після touch — дублюємо через touchend */
@@ -337,81 +494,35 @@ function closeColorPop(){
   colorPopCtx=null;
 }
 
-/* ───────────── touch drag ───────────── */
+/* ───────────── drag helpers ───────────── */
 function clearDropTargets(){
   document.querySelectorAll('.drop-target').forEach(n=>n.classList.remove('drop-target'));
 }
 
-function highlightCellAt(x,y){
-  clearDropTargets();
-  const el = document.elementFromPoint(x,y);
-  const cell = el?.closest('.cell');
-  if(cell) cell.classList.add('drop-target');
-  return cell;
-}
-
-function finishTouchDrag(clientX, clientY){
-  if(!touchDrag?.moved || !dragState) return false;
-  const cell = highlightCellAt(clientX, clientY);
-  const toKey = cellDateFromEl(cell);
-  if(toKey){
-    moveItem(dragState.fromKey, toKey, dragState.itemId);
-    justDropped = true;
-    setTimeout(()=>{ justDropped=false; },150);
-    renderCalendar();
-    if(selectedDateKey) renderPanelContent();
-    return true;
-  }
-  return false;
-}
-
-function setupTouchDrag(el, item, fromKey){
-  el.addEventListener('touchstart', e=>{
-    if(e.touches.length!==1) return;
-    const t = e.touches[0];
-    touchDrag = { itemId:item.id, fromKey, el, startX:t.clientX, startY:t.clientY, moved:false };
-  }, {passive:true});
-
-  el.addEventListener('touchmove', e=>{
-    if(!touchDrag || touchDrag.itemId!==item.id) return;
-    const t = e.touches[0];
-    const dx = Math.abs(t.clientX - touchDrag.startX);
-    const dy = Math.abs(t.clientY - touchDrag.startY);
-    if(dx>10 || dy>10){
-      touchDrag.moved = true;
-      dragState = { fromKey, itemId:item.id };
-      el.classList.add('dragging');
-      highlightCellAt(t.clientX, t.clientY);
-      e.preventDefault();
-    }
-  }, {passive:false});
-
-  el.addEventListener('touchend', e=>{
-    if(!touchDrag || touchDrag.itemId!==item.id) return;
-    const t = e.changedTouches[0];
-    el.classList.remove('dragging');
-    if(touchDrag.moved) finishTouchDrag(t.clientX, t.clientY);
-    clearDropTargets();
-    touchDrag = null;
-    dragState = null;
-  }, {passive:true});
-
-  el.addEventListener('touchcancel', ()=>{
-    el.classList.remove('dragging');
-    clearDropTargets();
-    touchDrag = null;
-    dragState = null;
-  }, {passive:true});
-}
-
 /* ───────────── calendar render ───────────── */
-function renderCalendar(){
-  loadMonth(viewYear,viewMonth);
-  document.getElementById('monthTitle').innerHTML=
-    MONTH_NAMES[viewMonth]+' <span class="year">'+viewYear+'</span>';
+function renderWeekGrid(grid){
+  syncWeekAnchor();
+  for(let i=0; i<7; i++){
+    const d = new Date(viewWeekAnchor);
+    d.setDate(d.getDate() + i);
+    loadMonth(d.getFullYear(), d.getMonth());
+  }
+  grid.classList.add('week-view');
+  grid.style.setProperty('--weeks', 1);
 
-  const grid=document.getElementById('grid');
-  grid.innerHTML='';
+  for(let i=0; i<7; i++){
+    const d = new Date(viewWeekAnchor);
+    d.setDate(d.getDate() + i);
+    const cy = d.getFullYear();
+    const cm = d.getMonth();
+    const dayNum = d.getDate();
+    const isOutside = cm !== viewMonth;
+    grid.appendChild(createCalendarCell({y:cy, m:cm, d:dayNum}, isOutside));
+  }
+}
+
+function renderMonthGrid(grid){
+  grid.classList.remove('week-view');
   const firstWeekday=(new Date(viewYear,viewMonth,1).getDay()+6)%7;
   const daysInMonth =new Date(viewYear,viewMonth+1,0).getDate();
   const daysInPrev  =new Date(viewYear,viewMonth, 0).getDate();
@@ -429,48 +540,26 @@ function renderCalendar(){
     } else {
       dayNum=i-firstWeekday+1;
     }
-
-    const cellDate={y:cy,m:cm,d:dayNum};
-    const cell=document.createElement('div');
-    cell.className='cell'+(isOutside?' outside':'');
-    cell.dataset.y=cy; cell.dataset.m=cm; cell.dataset.d=dayNum;
-    if(cy===today.getFullYear()&&cm===today.getMonth()&&dayNum===today.getDate())
-      cell.className+=' today';
-
-    const num=document.createElement('div');
-    num.className='datenum'; num.textContent=dayNum;
-    cell.appendChild(num);
-
-    const wrap=document.createElement('div');
-    wrap.className='cell-items';
-    getDayData(cy,cm,dayNum).items.forEach(item=>{
-      const block=document.createElement('div');
-      block.className='cell-item'+(item.done?' done':'');
-      block.textContent=item.text;
-      block.style.background=item.color||ITEM_COLORS[0];
-      block.style.color=textOnBg(item.color||ITEM_COLORS[0]);
-      block.draggable=true; block.title=item.text;
-      block.addEventListener('click',e=>e.stopPropagation());
-      block.addEventListener('dragstart',e=>{
-        dragState={fromKey:cellDate,itemId:item.id};
-        block.classList.add('dragging');
-        e.dataTransfer.effectAllowed='move';
-        e.dataTransfer.setData('text/plain',item.id);
-      });
-      block.addEventListener('dragend',()=>{
-        block.classList.remove('dragging');
-        clearDropTargets();
-        if(dragState) dragState=null;
-      });
-      setupTouchDrag(block, item, cellDate);
-      wrap.appendChild(block);
-    });
-    cell.appendChild(wrap);
-
-    cell.addEventListener('click',()=>{ if(!justDropped&&!dragState) openPanel(cy,cm,dayNum); });
-    setupCellDrop(cell,cellDate);
-    grid.appendChild(cell);
+    grid.appendChild(createCalendarCell({y:cy,m:cm,d:dayNum}, isOutside));
   }
+}
+
+function renderCalendar(){
+  updateViewToggle();
+  if(isWeekView()) syncWeekAnchor();
+
+  loadMonth(viewYear, viewMonth);
+  const titleEl = document.getElementById('monthTitle');
+  if(isWeekView()){
+    titleEl.innerHTML = formatWeekTitle(viewWeekAnchor);
+  } else {
+    titleEl.innerHTML = MONTH_NAMES[viewMonth]+' <span class="year">'+viewYear+'</span>';
+  }
+
+  const grid=document.getElementById('grid');
+  grid.innerHTML='';
+  if(isWeekView()) renderWeekGrid(grid);
+  else renderMonthGrid(grid);
   reportHeight();
 }
 
@@ -482,7 +571,8 @@ function openPanel(y,m,d){
   document.getElementById('panelDate').textContent=d+' '+MONTH_NAMES[m].toLowerCase()+' '+y;
   document.getElementById('panelWeekday').textContent=WEEKDAY_NAMES[dateObj.getDay()];
   document.querySelector('.panel-hint').textContent = isMobile()
-    ? 'Утримуй і перетягни запис на інший день. Свайп по календарю — змінити місяць.'
+    ? 'Натисни ↗ біля запису, потім обери день у календарі. Свайп — змінити ' +
+      (isWeekView() ? 'тиждень' : 'місяць') + '.'
     : 'Перетягни блок на потрібний день у календарі.';
   renderPanelContent();
   document.getElementById('overlay').classList.add('open');
@@ -507,10 +597,24 @@ function createItemRow(item,index,y,m,d){
   const row=document.createElement('div');
   row.className='item-row'+(item.done?' done':'');
   row.style.borderLeftColor=item.color||ITEM_COLORS[0];
-  row.draggable=true;
+  if(!isMobile()) row.draggable=true;
 
-  const handle=document.createElement('span');
-  handle.className='drag-handle'; handle.textContent='⠿';
+  let moveControl;
+  if(isMobile()){
+    moveControl=document.createElement('button');
+    moveControl.type='button';
+    moveControl.className='move-btn';
+    moveControl.textContent='↗';
+    moveControl.title='Перенести на інший день';
+    bindTap(moveControl, e=>{
+      e.stopPropagation();
+      startReassign({y,m,d}, item.id, item.text);
+    });
+  } else {
+    moveControl=document.createElement('span');
+    moveControl.className='drag-handle';
+    moveControl.textContent='⠿';
+  }
 
   const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=item.done;
   cb.addEventListener('change',()=>{
@@ -538,35 +642,36 @@ function createItemRow(item,index,y,m,d){
     scheduleSaveMonth(y,m); renderPanelContent(); renderCalendar();
   });
 
-  row.addEventListener('dragstart',e=>{
-    dragState={fromKey:{y,m,d},itemId:item.id};
-    row.classList.add('dragging');
-    e.dataTransfer.effectAllowed='move';
-    e.dataTransfer.setData('text/plain',item.id);
-  });
-  row.addEventListener('dragend',()=>{
-    row.classList.remove('dragging');
-    document.querySelectorAll('.drop-target,.drag-over').forEach(n=>{
-      n.classList.remove('drop-target','drag-over');
+  if(!isMobile()){
+    row.addEventListener('dragstart',e=>{
+      dragState={fromKey:{y,m,d},itemId:item.id};
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',item.id);
     });
-    if(dragState) dragState=null;
-  });
-  row.addEventListener('dragover',e=>{
-    if(!dragState||dragState.itemId===item.id) return;
-    if(dragState.fromKey.y!==y||dragState.fromKey.m!==m||dragState.fromKey.d!==d) return;
-    e.preventDefault(); row.classList.add('drag-over');
-  });
-  row.addEventListener('dragleave',()=>row.classList.remove('drag-over'));
-  row.addEventListener('drop',e=>{
-    e.preventDefault(); e.stopPropagation();
-    row.classList.remove('drag-over');
-    if(!dragState) return;
-    moveItem(dragState.fromKey,{y,m,d},dragState.itemId,index);
-    dragState=null; renderPanelContent(); renderCalendar();
-  });
+    row.addEventListener('dragend',()=>{
+      row.classList.remove('dragging');
+      document.querySelectorAll('.drop-target,.drag-over').forEach(n=>{
+        n.classList.remove('drop-target','drag-over');
+      });
+      if(dragState) dragState=null;
+    });
+    row.addEventListener('dragover',e=>{
+      if(!dragState||dragState.itemId===item.id) return;
+      if(dragState.fromKey.y!==y||dragState.fromKey.m!==m||dragState.fromKey.d!==d) return;
+      e.preventDefault(); row.classList.add('drag-over');
+    });
+    row.addEventListener('dragleave',()=>row.classList.remove('drag-over'));
+    row.addEventListener('drop',e=>{
+      e.preventDefault(); e.stopPropagation();
+      row.classList.remove('drag-over');
+      if(!dragState) return;
+      moveItem(dragState.fromKey,{y,m,d},dragState.itemId,index);
+      dragState=null; renderPanelContent(); renderCalendar();
+    });
+  }
 
-  setupTouchDrag(row, item, {y,m,d});
-  row.append(handle,cb,span,dot,del);
+  row.append(moveControl,cb,span,dot,del);
   return row;
 }
 
@@ -582,9 +687,41 @@ function addItemHandler(){
   input.focus();
 }
 
-function prevMonth(){ viewMonth--; if(viewMonth<0){viewMonth=11;viewYear--;} renderCalendar(); }
-function nextMonth(){ viewMonth++; if(viewMonth>11){viewMonth=0;viewYear++;} renderCalendar(); }
-function goToday(){ viewYear=today.getFullYear(); viewMonth=today.getMonth(); renderCalendar(); }
+function prevPeriod(){
+  if(reassignState) cancelReassign();
+  if(isWeekView()){
+    syncWeekAnchor();
+    viewWeekAnchor.setDate(viewWeekAnchor.getDate() - 7);
+    viewYear = viewWeekAnchor.getFullYear();
+    viewMonth = viewWeekAnchor.getMonth();
+  } else {
+    viewMonth--;
+    if(viewMonth<0){viewMonth=11;viewYear--;}
+  }
+  renderCalendar();
+}
+
+function nextPeriod(){
+  if(reassignState) cancelReassign();
+  if(isWeekView()){
+    syncWeekAnchor();
+    viewWeekAnchor.setDate(viewWeekAnchor.getDate() + 7);
+    viewYear = viewWeekAnchor.getFullYear();
+    viewMonth = viewWeekAnchor.getMonth();
+  } else {
+    viewMonth++;
+    if(viewMonth>11){viewMonth=0;viewYear++;}
+  }
+  renderCalendar();
+}
+
+function goToday(){
+  if(reassignState) cancelReassign();
+  viewYear=today.getFullYear();
+  viewMonth=today.getMonth();
+  if(isWeekView()) viewWeekAnchor = getMonday(today.getFullYear(), today.getMonth(), today.getDate());
+  renderCalendar();
+}
 
 function closePanel(){
   closeColorPop();
@@ -601,27 +738,32 @@ function bindEvents(){
   document.getElementById('overlay').addEventListener('click',e=>{
     if(e.target===document.getElementById('overlay')) closePanel();
   });
-  bindTap(document.getElementById('prevBtn'), prevMonth);
-  bindTap(document.getElementById('nextBtn'), nextMonth);
+  bindTap(document.getElementById('prevBtn'), prevPeriod);
+  bindTap(document.getElementById('nextBtn'), nextPeriod);
   bindTap(document.getElementById('todayBtn'), goToday);
+  bindTap(document.getElementById('reassignCancel'), cancelReassign);
   bindTap(document.getElementById('themeBtn'), e=>{
     e.stopPropagation();
     toggleThemePop();
   });
 
+  document.getElementById('viewToggle')?.querySelectorAll('.view-btn').forEach(btn=>{
+    bindTap(btn, ()=> setMobileViewMode(btn.dataset.view));
+  });
+
   const calendarBody = document.querySelector('.calendar-body');
   calendarBody.addEventListener('touchstart', e=>{
-    if(e.touches.length!==1) return;
+    if(e.touches.length!==1 || reassignState) return;
     swipeStartX = e.touches[0].clientX;
     swipeStartY = e.touches[0].clientY;
   }, {passive:true});
   calendarBody.addEventListener('touchend', e=>{
-    if(swipeStartX===null || touchDrag?.moved) { swipeStartX=null; return; }
+    if(swipeStartX===null || reassignState) { swipeStartX=null; return; }
     const t = e.changedTouches[0];
     const dx = t.clientX - swipeStartX;
     const dy = Math.abs(t.clientY - swipeStartY);
     if(Math.abs(dx)>55 && dy<80){
-      if(dx<0) nextMonth(); else prevMonth();
+      if(dx<0) nextPeriod(); else prevPeriod();
     }
     swipeStartX = null;
   }, {passive:true});
@@ -651,7 +793,11 @@ function bindEvents(){
       closeColorPop();
   });
 
-  window.addEventListener('resize', reportHeight);
+  window.addEventListener('resize', ()=>{
+    if(!isMobile() && reassignState) cancelReassign();
+    updateViewToggle();
+    reportHeight();
+  });
   PlannerStorage.setOnSaved(flashSaveStatus);
 }
 
