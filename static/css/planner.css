@@ -217,7 +217,7 @@ h1 .year{color:var(--muted);font-weight:500;}
 .item-row:hover .del-btn{opacity:1;}
 .del-btn:hover{color:var(--coral);background:rgba(193,102,107,.12);}
 
-.add-row{display:flex;gap:8px;margin-top:12px;}
+.add-row{display:flex;flex-direction:row-reverse;gap:8px;margin-top:12px;}
 .add-row input{
   flex:1;background:var(--panel);border:1px solid var(--line);
   color:var(--ink);padding:8px 10px;border-radius:4px;
@@ -368,7 +368,7 @@ h1 .year{color:var(--muted);font-weight:500;}
     border-left:none;border-top:1px solid var(--line);
     border-radius:16px 16px 0 0;
     max-height:88vh;
-    padding:12px 16px calc(16px + env(safe-area-inset-bottom));
+    padding:12px 16px calc(80px + env(safe-area-inset-bottom));
     animation:slideup .22s ease-out;
   }
   .panel-handle{display:block;}
@@ -388,6 +388,15 @@ h1 .year{color:var(--muted);font-weight:500;}
     display:flex;align-items:center;justify-content:center;
   }
   .item-row input[type=checkbox]{width:22px;height:22px;}
+
+  .add-row{
+    flex-direction:row;
+    position:sticky;bottom:0;z-index:2;
+    margin-top:12px;padding-top:10px;
+    background:linear-gradient(transparent, var(--panel-2) 16px);
+  }
+  .add-row #addItemBtn{flex-shrink:0;}
+  .add-row input{flex:1;min-width:0;}
 
   .color-pop{max-width:calc(100vw - 24px);padding:12px;}
   .color-pop-swatches{width:auto;justify-content:center;}
