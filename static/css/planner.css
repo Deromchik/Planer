@@ -190,7 +190,18 @@ h1 .year{color:var(--muted);font-weight:500;}
 .drag-handle:hover{opacity:1;color:var(--accent);}
 .drag-handle:active{cursor:grabbing;}
 .item-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--teal);flex-shrink:0;cursor:pointer;}
-.item-text{flex:1;font-size:14px;min-width:0;word-break:break-word;}
+.item-text{
+  flex:1;font-size:14px;min-width:0;word-break:break-word;
+  cursor:text;border-radius:3px;padding:2px 4px;margin:-2px -4px;
+  transition:background .15s;
+}
+.item-text:hover{background:rgba(255,255,255,.06);}
+.item-text-input{
+  flex:1;min-width:0;background:var(--panel);border:1px solid var(--accent);
+  color:var(--ink);padding:6px 8px;border-radius:4px;
+  font-family:'Inter',sans-serif;font-size:14px;
+}
+.item-text-input:focus{outline:none;}
 .color-dot{
   width:20px;height:20px;border-radius:50%;
   border:2px solid rgba(255,255,255,.2);cursor:pointer;flex-shrink:0;
@@ -333,7 +344,8 @@ h1 .year{color:var(--muted);font-weight:500;}
   .panel-hint{font-size:11px;}
 
   .item-row{padding:10px 8px;gap:10px;min-height:48px;}
-  .item-text{font-size:15px;}
+  .item-text{font-size:15px;padding:4px 6px;margin:-4px -6px;}
+  .item-text-input{font-size:16px;padding:8px 10px;min-height:44px;}
   .drag-handle{font-size:18px;padding:4px;opacity:.6;}
   .move-btn{width:44px;height:44px;font-size:18px;}
   .color-dot{width:28px;height:28px;}

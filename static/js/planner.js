@@ -571,9 +571,9 @@ function openPanel(y,m,d){
   document.getElementById('panelDate').textContent=d+' '+MONTH_NAMES[m].toLowerCase()+' '+y;
   document.getElementById('panelWeekday').textContent=WEEKDAY_NAMES[dateObj.getDay()];
   document.querySelector('.panel-hint').textContent = isMobile()
-    ? 'Натисни ↗ біля запису, потім обери день у календарі. Свайп — змінити ' +
+    ? 'Натисни текст запису, щоб редагувати. ↗ — перенести на інший день. Свайп — змінити ' +
       (isWeekView() ? 'тиждень' : 'місяць') + '.'
-    : 'Перетягни блок на потрібний день у календарі.';
+    : 'Натисни текст запису, щоб редагувати. Перетягни блок на потрібний день у календарі.';
   renderPanelContent();
   document.getElementById('overlay').classList.add('open');
   reportHeight();
@@ -591,6 +591,45 @@ function renderPanelContent(){
     list.appendChild(n); return;
   }
   dd.items.forEach((item,i)=>list.appendChild(createItemRow(item,i,y,m,d)));
+}
+
+function startItemTextEdit(item, textEl, y, m, d){
+  if(textEl.closest('.item-list')?.querySelector('.item-text-input')) return;
+  const original = item.text;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'item-text-input';
+  input.value = original;
+  input.setAttribute('autocomplete', 'off');
+  textEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let finished = false;
+  function finish(save){
+    if(finished) return;
+    finished = true;
+    if(save){
+      const next = input.value.trim();
+      if(next && next !== item.text){
+        item.text = next;
+        scheduleSaveMonth(y,m);
+      }
+    }
+    renderPanelContent();
+    renderCalendar();
+  }
+
+  input.addEventListener('blur', ()=> finish(true));
+  input.addEventListener('keydown', e=>{
+    e.stopPropagation();
+    if(e.key === 'Enter'){ e.preventDefault(); input.blur(); }
+    if(e.key === 'Escape'){
+      e.preventDefault();
+      item.text = original;
+      finish(false);
+    }
+  });
 }
 
 function createItemRow(item,index,y,m,d){
@@ -623,7 +662,13 @@ function createItemRow(item,index,y,m,d){
   });
 
   const span=document.createElement('span');
-  span.className='item-text'; span.textContent=item.text;
+  span.className='item-text';
+  span.textContent=item.text;
+  span.title='Натисни, щоб редагувати';
+  bindTap(span, e=>{
+    e.stopPropagation();
+    startItemTextEdit(item, span, y, m, d);
+  });
 
   const dot=document.createElement('button');
   dot.type='button'; dot.className='color-dot';
