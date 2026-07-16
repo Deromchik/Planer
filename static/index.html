@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1B2027">
+<title>Гросбух — особистий планувальник</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- PLANNER_CSS -->
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="month-nav">
+      <button type="button" id="prevBtn" title="Попередній місяць">‹</button>
+      <h1 id="monthTitle">— <span class="year">—</span></h1>
+      <button type="button" id="nextBtn" title="Наступний місяць">›</button>
+    </div>
+    <div class="actions">
+      <button type="button" class="theme-btn" id="themeBtn" title="Колір календаря">
+        <span class="theme-btn-dot" id="themeBtnDot"></span>
+        Тема
+      </button>
+      <span class="save-status" id="saveStatus">Збережено</span>
+      <button type="button" class="pill-btn" id="todayBtn">Сьогодні</button>
+    </div>
+  </div>
+  <div class="calendar-body">
+    <div class="weekdays">
+      <div>ПН</div><div>ВТ</div><div>СР</div><div>ЧТ</div><div>ПТ</div><div>СБ</div><div>НД</div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="panel">
+    <div class="panel-handle"></div>
+    <button type="button" class="close" id="panelClose" title="Закрити">✕</button>
+    <h2 id="panelDate">—</h2>
+    <div class="sub" id="panelWeekday">—</div>
+    <div class="panel-hint">Перетягни блок на потрібний день у календарі.</div>
+    <div class="item-list" id="itemList"></div>
+    <div class="add-row">
+      <input type="text" id="newItem" placeholder="Новий запис…" autocomplete="off">
+      <button type="button" id="addItemBtn">+</button>
+    </div>
+  </div>
+</div>
+
+<div class="color-pop" id="themePop">
+  <div class="color-pop-title">Колір календаря</div>
+  <div class="color-pop-swatches" id="themePopSwatches"></div>
+</div>
+
+<div class="color-pop" id="colorPop">
+  <div class="color-pop-title">Колір запису</div>
+  <div class="color-pop-swatches" id="colorPopSwatches"></div>
+</div>
+
+<!-- PLANNER_CONFIG -->
+<!-- PLANNER_STORAGE_JS -->
+<!-- PLANNER_JS -->
+</body>
+</html>
