@@ -22,9 +22,11 @@ def get_secrets() -> dict:
 
 
 def supabase_load(url: str, key: str, row_id: str) -> dict:
+    """Завантажити дані з Supabase або повернути дефолт."""
     default = {"theme": {"bg": "#1B2027"}, "months": {}}
     if not url or not key:
         return default
+
     headers = {
         "apikey": key,
         "Authorization": f"Bearer {key}",
@@ -44,6 +46,7 @@ def supabase_load(url: str, key: str, row_id: str) -> dict:
                     "theme": row.get("theme") or default["theme"],
                     "months": row.get("months") or {},
                 }
+        # Якщо запису немає — створити
         requests.post(
             f"{url}/rest/v1/planner_store",
             headers={**headers, "Content-Type": "application/json", "Prefer": "return=minimal"},
@@ -56,78 +59,74 @@ def supabase_load(url: str, key: str, row_id: str) -> dict:
 
 
 def build_planner_html(data: dict, config: dict) -> str:
-    html = read_file(STATIC / "index.html")
-    css = read_file(STATIC / "css" / "planner.css")
-    storage_js = read_file(STATIC / "js" / "storage.js")
-    planner_js = read_file(STATIC / "js" / "planner.js")
+  html = read_file(STATIC / "index.html")
+  css = read_file(STATIC / "css" / "planner.css")
+  storage_js = read_file(STATIC / "js" / "storage.js")
+  planner_js = read_file(STATIC / "js" / "planner.js")
 
-    config_script = (
-        "<script>window.__PLANNER_CONFIG__ = "
-        + json.dumps(config, ensure_ascii=False)
-        + ";</script>"
-    )
-    data_script = (
-        "<script>window.__PLANNER_DATA__ = "
-        + json.dumps(data, ensure_ascii=False)
-        + ";</script>"
-    )
+  config_script = (
+      "<script>window.__PLANNER_CONFIG__ = "
+      + json.dumps(config, ensure_ascii=False)
+      + ";</script>"
+  )
+  data_script = (
+      "<script>window.__PLANNER_DATA__ = "
+      + json.dumps(data, ensure_ascii=False)
+      + ";</script>"
+  )
 
-    html = html.replace("<!-- PLANNER_CSS -->", f"<style>{css}</style>")
-    html = html.replace("<!-- PLANNER_CONFIG -->", config_script + data_script)
-    html = html.replace("<!-- PLANNER_STORAGE_JS -->", f"<script>{storage_js}</script>")
-    html = html.replace("<!-- PLANNER_JS -->", f"<script>{planner_js}</script>")
-    return html
+  html = html.replace("<!-- PLANNER_CSS -->", f"<style>{css}</style>")
+  html = html.replace("<!-- PLANNER_CONFIG -->", config_script + data_script)
+  html = html.replace("<!-- PLANNER_STORAGE_JS -->", f"<script>{storage_js}</script>")
+  html = html.replace("<!-- PLANNER_JS -->", f"<script>{planner_js}</script>")
+  return html
 
 
 def hide_streamlit_chrome():
     st.markdown(
         """
         <style>
-          /* Прибираємо всі відступи Streamlit і розтягуємо на весь екран */
-          html, body { margin: 0; padding: 0; overflow: hidden; background: #1B2027; }
-          .stApp { background: #1B2027 !important; }
-          header[data-testid="stHeader"],
-          footer,
-          [data-testid="stToolbar"],
-          [data-testid="stDecoration"],
-          [data-testid="stStatusWidget"] {
-            display: none !important;
+          .stApp, [data-testid="stAppViewContainer"], .main, section.main {
+            background-color: #1B2027 !important;
           }
-          .main .block-container {
+          header[data-testid="stHeader"] {display: none !important; height: 0 !important;}
+          footer {visibility: hidden;}
+          .block-container {
             padding: 0 !important;
             max-width: 100% !important;
           }
-          [data-testid="stVerticalBlock"] { gap: 0 !important; }
-          [data-testid="stAlert"] { margin: 0 !important; flex-shrink: 0; }
-
-          /* iframe — точно розмір вікна, без жодних рамок/відступів */
           iframe[title="streamlit_components_v1"] {
-            border: none !important;
-            display: block !important;
+            border: none;
             width: 100% !important;
             height: 100vh !important;
+            height: 100dvh !important;
+            min-height: 100vh !important;
+            display: block;
+            overflow: hidden;
           }
         </style>
         <script>
-          (function () {
-            function fit() {
-              var iframe = document.querySelector('iframe[title="streamlit_components_v1"]');
-              if (iframe) {
-                iframe.style.height = window.innerHeight + 'px';
-              }
+          function resizePlannerIframe(h) {
+            var iframe = document.querySelector('iframe[title="streamlit_components_v1"]');
+            if (!iframe) return;
+            /* На мобільному plannerjs завжди надсилає innerHeight,
+               тому iframe ніколи не виходить за межі екрана.
+               На десктопі дозволяємо рости під контент.           */
+            var isMobile = window.innerWidth <= 768;
+            var minH = isMobile
+              ? window.innerHeight
+              : Math.max(h || 0, window.innerHeight);
+            iframe.style.height = minH + 'px';
+          }
+          window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'planner-resize') {
+              resizePlannerIframe(e.data.height);
             }
-            window.addEventListener('resize', fit);
-            window.addEventListener('message', function (e) {
-              if (e.data && e.data.type === 'planner-theme') {
-                var bg = e.data.bg;
-                if (bg) document.documentElement.style.background = bg;
-              }
-            });
-            // Запускаємо після того як Streamlit вставить iframe
-            setTimeout(fit, 0);
-            setTimeout(fit, 200);
-            setTimeout(fit, 800);
-          })();
+          });
+          window.addEventListener('resize', function() {
+            resizePlannerIframe(window.innerHeight);
+          });
+          resizePlannerIframe(window.innerHeight);
         </script>
         """,
         unsafe_allow_html=True,
@@ -167,9 +166,7 @@ def main():
         )
 
     html = build_planner_html(data, config)
-    # height=1 щоб Streamlit не додавав власну прокрутку;
-    # реальну висоту задає CSS та JS у батьківській сторінці
-    components.html(html, height=1, scrolling=False)
+    components.html(html, height=800, scrolling=False)
 
 
 if __name__ == "__main__":

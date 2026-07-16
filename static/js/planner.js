@@ -469,10 +469,18 @@ function setupCalendarTouchGuard(calendarBody){
   }, {passive:true, capture:true});
 }
 
+/* Завжди посилаємо innerHeight на мобільному — iframe не росте
+   понад viewport, тому Streamlit-батько ніколи не стає прокрутним,
+   а position:fixed / flex-layout всередині iframe не ламається.   */
 function reportHeight(){
-  try {
-    window.parent.postMessage({type:'planner-resize', height: window.innerHeight}, '*');
-  } catch(e){}
+  const h = isMobile()
+    ? window.innerHeight
+    : Math.max(
+        document.documentElement.scrollHeight,
+        document.documentElement.clientHeight,
+        window.innerHeight
+      );
+  try { window.parent.postMessage({type:'planner-resize', height:h}, '*'); } catch(e){}
 }
 
 /* VisualViewport API — рухаємо overlay вгору, коли iOS-клавіатура
@@ -558,13 +566,6 @@ function applyBgTheme(bg){
     custom.closest('.swatch').classList.toggle('active', isCustom);
     custom.value = bg;
   }
-
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if(meta) meta.content = bg;
-
-  try {
-    window.parent.postMessage({type:'planner-theme', bg}, '*');
-  } catch(e){}
 }
 
 function buildThemePop(){
@@ -1150,9 +1151,6 @@ function initPlanner(){
   loadTheme();
   renderCalendar();
   reportHeight();
-  setTimeout(reportHeight, 50);
-  setTimeout(reportHeight, 300);
-  setTimeout(reportHeight, 1000);
 }
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPlanner);
