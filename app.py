@@ -21,39 +21,43 @@ def get_secrets() -> dict:
         return {}
 
 
-def supabase_load(url: str, key: str, row_id: str) -> dict:
-    """Завантажити дані з Supabase або повернути дефолт."""
+def _parse_supabase_row(row: dict, default: dict) -> dict:
+    return {
+        "theme": row.get("theme") or default["theme"],
+        "months": row.get("months") or {},
+        "recurring": row.get("recurring") or [],
+        "recurringDone": row.get("recurring_done") or {},
+    }
+
+
+def supabase_load(url: str, key: str, row_id: str) -> dict | None:
+    """Завантажити дані з Supabase. None — якщо хмара не налаштована."""
     default = {"theme": {"bg": "#1B2027"}, "months": {}, "recurring": [], "recurringDone": {}}
     if not url or not key:
-        return default
+        return None
 
     headers = {
         "apikey": key,
         "Authorization": f"Bearer {key}",
     }
     try:
-        res = requests.get(
-            f"{url}/rest/v1/planner_store",
-            params={"id": f"eq.{row_id}", "select": "theme,months,recurring,recurring_done"},
-            headers=headers,
-            timeout=10,
-        )
-        if res.status_code == 200:
-            rows = res.json()
-            if rows:
-                row = rows[0]
-                return {
-                    "theme": row.get("theme") or default["theme"],
-                    "months": row.get("months") or {},
-                    "recurring": row.get("recurring") or [],
-                    "recurringDone": row.get("recurring_done") or {},
-                }
+        for select in ("theme,months,recurring,recurring_done", "theme,months"):
+            res = requests.get(
+                f"{url}/rest/v1/planner_store",
+                params={"id": f"eq.{row_id}", "select": select},
+                headers=headers,
+                timeout=10,
+            )
+            if res.status_code == 200:
+                rows = res.json()
+                if rows:
+                    return _parse_supabase_row(rows[0], default)
+                break
         # Якщо запису немає — створити
         requests.post(
             f"{url}/rest/v1/planner_store",
             headers={**headers, "Content-Type": "application/json", "Prefer": "return=minimal"},
-            json={"id": row_id, "theme": default["theme"], "months": {},
-                  "recurring": [], "recurring_done": {}},
+            json={"id": row_id, "theme": default["theme"], "months": {}},
             timeout=10,
         )
     except Exception as e:
@@ -74,7 +78,7 @@ def build_planner_html(data: dict, config: dict) -> str:
   )
   data_script = (
       "<script>window.__PLANNER_DATA__ = "
-      + json.dumps(data, ensure_ascii=False)
+      + (json.dumps(data, ensure_ascii=False) if data is not None else "null")
       + ";</script>"
   )
 
@@ -156,10 +160,7 @@ def main():
         "rowId": row_id,
     }
 
-    data = supabase_load(supabase_url, supabase_key, row_id) if supabase_url and supabase_key else {
-        "theme": {"bg": "#1B2027"},
-        "months": {},
-    }
+    data = supabase_load(supabase_url, supabase_key, row_id)
 
     if not supabase_url or not supabase_key:
         st.info(

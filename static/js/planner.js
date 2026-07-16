@@ -720,11 +720,44 @@ function getDayData(y,m,d){
 }
 
 /* ───────────── recurring helpers ───────────── */
+const RECURRING_LIMIT_WEEKLY_MONTHS = 6;
+const RECURRING_LIMIT_MONTHLY_YEARS = 1;
+
 function dateStr(y, m, d) {
   return y + '-' + pad(m + 1) + '-' + pad(d);
 }
 
+function parseDateStr(str) {
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function recurringCreatedAt(rule) {
+  if (rule.createdAt) return rule.createdAt;
+  return dateStr(today.getFullYear(), today.getMonth(), today.getDate());
+}
+
+function recurringEndDate(rule) {
+  const end = parseDateStr(recurringCreatedAt(rule));
+  if (rule.type === 'weekly') end.setMonth(end.getMonth() + RECURRING_LIMIT_WEEKLY_MONTHS);
+  else if (rule.type === 'monthly') end.setFullYear(end.getFullYear() + RECURRING_LIMIT_MONTHLY_YEARS);
+  else return end;
+  return end;
+}
+
+function recurringIsWithinLimit(rule, y, m, d) {
+  const start = parseDateStr(recurringCreatedAt(rule));
+  start.setHours(0, 0, 0, 0);
+  const target = new Date(y, m, d);
+  target.setHours(0, 0, 0, 0);
+  if (target < start) return false;
+  const end = recurringEndDate(rule);
+  end.setHours(23, 59, 59, 999);
+  return target <= end;
+}
+
 function recurringMatchesDay(rule, y, m, d) {
+  if (!recurringIsWithinLimit(rule, y, m, d)) return false;
   if (rule.type === 'weekly')  return new Date(y, m, d).getDay() === rule.value;
   if (rule.type === 'monthly') return d === rule.value;
   return false;
@@ -759,9 +792,12 @@ function deleteRecurringRule(ruleId) {
   flashSaveStatus();
 }
 
-function addRecurringRule(text, color, type, value) {
+function addRecurringRule(text, color, type, value, createdAt) {
   const rules = [...PlannerStorage.getRecurring()];
-  rules.push({ id: uid(), text, color, type, value });
+  rules.push({
+    id: uid(), text, color, type, value,
+    createdAt: createdAt || dateStr(today.getFullYear(), today.getMonth(), today.getDate()),
+  });
   PlannerStorage.setRecurring(rules);
   flashSaveStatus();
 }
@@ -950,8 +986,8 @@ const REC_DAY_LABELS = ['нд','пн','вт','ср','чт','пт','сб'];
 const REC_DAY_SHORT  = ['НД','ПН','ВТ','СР','ЧТ','ПТ','СБ'];
 
 function recRuleLabel(rule){
-  if(rule.type === 'weekly')  return 'щo' + REC_DAY_LABELS[rule.value];
-  if(rule.type === 'monthly') return 'кожного ' + rule.value + '-го';
+  if(rule.type === 'weekly')  return 'щo' + REC_DAY_LABELS[rule.value] + ' · 6 міс.';
+  if(rule.type === 'monthly') return 'кожного ' + rule.value + '-го · 1 рік';
   return '';
 }
 
@@ -1081,12 +1117,12 @@ function buildRecurringForm(y, m, d, section){
   const weeklyBtn = document.createElement('button');
   weeklyBtn.type = 'button';
   weeklyBtn.className = 'rec-type-btn active';
-  weeklyBtn.textContent = 'Щотижня';
+  weeklyBtn.textContent = 'Щотижня (6 міс.)';
 
   const monthlyBtn = document.createElement('button');
   monthlyBtn.type = 'button';
   monthlyBtn.className = 'rec-type-btn';
-  monthlyBtn.textContent = 'Щомісяця';
+  monthlyBtn.textContent = 'Щомісяця (1 рік)';
 
   typeRow.append(weeklyBtn, monthlyBtn);
   form.appendChild(typeRow);
@@ -1173,7 +1209,7 @@ function buildRecurringForm(y, m, d, section){
     const value = currentType === 'weekly'
       ? selectedDow
       : Math.min(31, Math.max(1, parseInt(domInput.value) || d));
-    addRecurringRule(text, selectedColor, currentType, value);
+    addRecurringRule(text, selectedColor, currentType, value, dateStr(y, m, d));
     form.remove();
     renderCalendar();
     renderPanelContent();
@@ -1452,8 +1488,6 @@ function initPlanner(){
     supabaseKey: cfg.supabaseKey || null,
     rowId: cfg.rowId || 'main',
   }, initial);
-
-  if(!initial) PlannerStorage.loadLocal();
 
   const allMonths = PlannerStorage.getAllMonths();
   for(const k of Object.keys(allMonths)) monthCache[k] = migrateMonthData(allMonths[k]);
