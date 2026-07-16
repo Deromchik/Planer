@@ -206,7 +206,11 @@ function bindTap(el, handler){
 }
 
 function reportHeight(){
-  const h = document.documentElement.scrollHeight || window.innerHeight;
+  const h = Math.max(
+    document.documentElement.scrollHeight,
+    document.documentElement.clientHeight,
+    window.innerHeight
+  );
   try { window.parent.postMessage({type:'planner-resize', height:h}, '*'); } catch(e){}
 }
 
@@ -865,6 +869,9 @@ function initPlanner(){
   bindEvents();
   loadTheme();
   renderCalendar();
+  reportHeight();
+  setTimeout(reportHeight, 100);
+  setTimeout(reportHeight, 500);
 }
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPlanner);

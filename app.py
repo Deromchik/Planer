@@ -86,7 +86,10 @@ def hide_streamlit_chrome():
     st.markdown(
         """
         <style>
-          header[data-testid="stHeader"] {visibility: hidden;}
+          .stApp, [data-testid="stAppViewContainer"], .main, section.main {
+            background-color: #1B2027 !important;
+          }
+          header[data-testid="stHeader"] {display: none !important; height: 0 !important;}
           footer {visibility: hidden;}
           .block-container {
             padding: 0 !important;
@@ -95,15 +98,26 @@ def hide_streamlit_chrome():
           iframe[title="streamlit_components_v1"] {
             border: none;
             width: 100% !important;
+            min-height: 100vh !important;
+            display: block;
           }
         </style>
         <script>
+          function resizePlannerIframe(h) {
+            var iframe = document.querySelector('iframe[title="streamlit_components_v1"]');
+            if (!iframe) return;
+            var minH = Math.max(h || 0, window.innerHeight);
+            iframe.style.height = minH + 'px';
+          }
           window.addEventListener('message', function(e) {
             if (e.data && e.data.type === 'planner-resize') {
-              var iframe = document.querySelector('iframe[title="streamlit_components_v1"]');
-              if (iframe) iframe.style.height = e.data.height + 'px';
+              resizePlannerIframe(e.data.height);
             }
           });
+          window.addEventListener('resize', function() {
+            resizePlannerIframe(window.innerHeight);
+          });
+          resizePlannerIframe(window.innerHeight);
         </script>
         """,
         unsafe_allow_html=True,
@@ -143,7 +157,7 @@ def main():
         )
 
     html = build_planner_html(data, config)
-    components.html(html, height=820, scrolling=False)
+    components.html(html, height=1200, scrolling=False)
 
 
 if __name__ == "__main__":

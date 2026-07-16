@@ -7,3 +7,8 @@ gatherUsageStats = false
 
 [server]
 headless = true
+
+[theme]
+base = "dark"
+backgroundColor = "#1B2027"
+secondaryBackgroundColor = "#242B34"
