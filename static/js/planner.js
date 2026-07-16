@@ -1,6 +1,7 @@
 /* ───────────── constants ───────────── */
 const MONTH_NAMES  = ["СІЧЕНЬ","ЛЮТИЙ","БЕРЕЗЕНЬ","КВІТЕНЬ","ТРАВЕНЬ","ЧЕРВЕНЬ","ЛИПЕНЬ","СЕРПЕНЬ","ВЕРЕСЕНЬ","ЖОВТЕНЬ","ЛИСТОПАД","ГРУДЕНЬ"];
 const WEEKDAY_NAMES = ["неділя","понеділок","вівторок","середа","четвер","п'ятниця","субота"];
+const WEEKDAY_SHORT = ["НД","ПН","ВТ","СР","ЧТ","ПТ","СБ"];
 const THEME_COLORS  = ['#1B2027','#141B2D','#1A2421','#231C1C','#1E1A28','#F4F0E6','#E8ECF0'];
 const ITEM_COLORS   = ['#D4A94F','#4F8F82','#C1666B','#6B8FC1','#9B7EC8','#E07B54','#7EC1B8'];
 
@@ -23,6 +24,7 @@ let popOpenedAt     = 0;
 let mobileViewMode  = 'week';
 let viewWeekAnchor  = null;
 let reassignState   = null;
+let suppressCellTap = false;
 
 function isMobile(){ return window.matchMedia('(max-width:768px)').matches; }
 
@@ -136,6 +138,16 @@ function cellDateFromEl(cell){
   return {y,m,d};
 }
 
+function activateCell(cellDate){
+  if(suppressCellTap) return;
+  const {y:cy, m:cm, d:dayNum} = cellDate;
+  if(reassignState && isMobile()){
+    handleReassignClick(cellDate);
+    return;
+  }
+  if(!justDropped && !dragState) openPanel(cy, cm, dayNum);
+}
+
 function createCalendarCell(cellDate, isOutside){
   const {y:cy, m:cm, d:dayNum} = cellDate;
   const cell=document.createElement('div');
@@ -146,7 +158,10 @@ function createCalendarCell(cellDate, isOutside){
   if(reassignState && isMobile()) cell.classList.add('reassign-target');
 
   const num=document.createElement('div');
-  num.className='datenum'; num.textContent=dayNum;
+  num.className='datenum';
+  num.textContent = isWeekView()
+    ? WEEKDAY_SHORT[new Date(cy, cm, dayNum).getDay()] + ' ' + dayNum
+    : String(dayNum);
   cell.appendChild(num);
 
   const wrap=document.createElement('div');
@@ -158,8 +173,9 @@ function createCalendarCell(cellDate, isOutside){
     block.style.background=item.color||ITEM_COLORS[0];
     block.style.color=textOnBg(item.color||ITEM_COLORS[0]);
     block.title=item.text;
-    block.addEventListener('click',e=>e.stopPropagation());
+    block.style.pointerEvents = isMobile() ? 'none' : 'auto';
     if(!isMobile()){
+      block.addEventListener('click',e=>e.stopPropagation());
       block.draggable=true;
       block.addEventListener('dragstart',e=>{
         dragState={fromKey:cellDate,itemId:item.id};
@@ -177,13 +193,7 @@ function createCalendarCell(cellDate, isOutside){
   });
   cell.appendChild(wrap);
 
-  cell.addEventListener('click',()=>{
-    if(reassignState && isMobile()){
-      handleReassignClick(cellDate);
-      return;
-    }
-    if(!justDropped && !dragState) openPanel(cy,cm,dayNum);
-  });
+  bindTap(cell, ()=> activateCell(cellDate));
   if(!isMobile()) setupCellDrop(cell, cellDate);
   return cell;
 }
@@ -562,6 +572,7 @@ function renderCalendar(){
 
   const grid=document.getElementById('grid');
   grid.innerHTML='';
+  document.querySelector('.calendar-body')?.classList.toggle('week-mode', isWeekView());
   if(isWeekView()) renderWeekGrid(grid);
   else renderMonthGrid(grid);
   reportHeight();
@@ -805,6 +816,13 @@ function bindEvents(){
     if(e.touches.length!==1 || reassignState) return;
     swipeStartX = e.touches[0].clientX;
     swipeStartY = e.touches[0].clientY;
+    suppressCellTap = false;
+  }, {passive:true});
+  calendarBody.addEventListener('touchmove', e=>{
+    if(swipeStartX===null || reassignState) return;
+    const dx = Math.abs(e.touches[0].clientX - swipeStartX);
+    const dy = Math.abs(e.touches[0].clientY - swipeStartY);
+    if(dx > 12 || dy > 12) suppressCellTap = true;
   }, {passive:true});
   calendarBody.addEventListener('touchend', e=>{
     if(swipeStartX===null || reassignState) { swipeStartX=null; return; }
@@ -812,9 +830,11 @@ function bindEvents(){
     const dx = t.clientX - swipeStartX;
     const dy = Math.abs(t.clientY - swipeStartY);
     if(Math.abs(dx)>55 && dy<80){
+      suppressCellTap = true;
       if(dx<0) nextPeriod(); else prevPeriod();
     }
     swipeStartX = null;
+    setTimeout(()=>{ suppressCellTap = false; }, 80);
   }, {passive:true});
 
   let panelSwipeY = null;

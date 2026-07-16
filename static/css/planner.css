@@ -312,31 +312,42 @@ h1 .year{color:var(--muted);font-weight:500;}
 
   .weekdays div{font-size:10px;padding:6px 0;}
   .calendar-body{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .calendar-body.week-mode .weekdays{display:none;}
   .grid{
     flex:none;
     align-content:start;
     grid-template-rows:repeat(var(--weeks,5), auto);
   }
   .grid.week-view{
+    grid-template-columns:repeat(2, 1fr);
     grid-template-rows:auto;
+    grid-auto-rows:auto;
   }
   .cell{
     aspect-ratio:1;
-    min-height:0;
-    height:auto;
-    padding:4px 3px;
+    width:100%;
+    padding:5px 4px;
   }
-  .cell .datenum{font-size:11px;margin-bottom:2px;}
-  .cell-items{gap:1px;}
+  .grid.week-view .cell{
+    min-height:calc((100vw - 12px) / 2);
+  }
+  .grid.week-view .cell:nth-child(2n){border-right:none;}
+  .cell .datenum{font-size:12px;margin-bottom:3px;font-weight:500;}
+  .grid.week-view .cell .datenum{font-size:13px;}
+  .cell-items{gap:2px;}
   .cell-item{
-    font-size:9px;padding:2px 3px;border-radius:3px;
-    min-height:0;line-height:1.2;touch-action:manipulation;
+    font-size:10px;padding:3px 4px;border-radius:3px;
+    line-height:1.25;touch-action:manipulation;
     white-space:normal;
     overflow:hidden;
     display:-webkit-box;
-    -webkit-line-clamp:2;
+    -webkit-line-clamp:3;
     -webkit-box-orient:vertical;
     text-overflow:ellipsis;
+  }
+  .grid.week-view .cell-item{
+    font-size:11px;
+    -webkit-line-clamp:4;
   }
 
   .reassign-bar{padding:12px 14px calc(10px + env(safe-area-inset-bottom));}
