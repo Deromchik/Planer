@@ -25,6 +25,8 @@ let mobileViewMode  = 'week';
 let viewWeekAnchor  = null;
 let reassignState   = null;
 let suppressCellTap = false;
+let touchPointer      = null;
+let weekLoading       = false;
 const WEEKS_BEFORE = 8;
 const WEEKS_AFTER = 16;
 const WEEKS_LOAD_MORE = 6;
@@ -199,13 +201,22 @@ function prependWeekBlocks(count){
 }
 
 function maybeLoadMoreWeeks(){
+  if(weekLoading) return;
   const calendarBody = document.querySelector('.calendar-body');
   const container = document.getElementById('weekScroll');
   if(!calendarBody || !container) return;
 
   const distBottom = container.offsetHeight - (calendarBody.scrollTop + calendarBody.clientHeight);
-  if(distBottom < 500) appendWeekBlocks(WEEKS_LOAD_MORE);
-  if(calendarBody.scrollTop < 500) prependWeekBlocks(WEEKS_LOAD_MORE);
+  if(distBottom < 500){
+    weekLoading = true;
+    appendWeekBlocks(WEEKS_LOAD_MORE);
+    weekLoading = false;
+  }
+  if(calendarBody.scrollTop < 500){
+    weekLoading = true;
+    prependWeekBlocks(WEEKS_LOAD_MORE);
+    weekLoading = false;
+  }
 }
 
 function onWeekScroll(){
@@ -214,7 +225,7 @@ function onWeekScroll(){
   weekScrollTimer = setTimeout(()=>{
     updateActiveWeekFromScroll();
     maybeLoadMoreWeeks();
-  }, 60);
+  }, 100);
 }
 
 function navigateToWeek(monday){
@@ -391,21 +402,81 @@ function bindTap(el, handler){
   el.addEventListener('touchend', e=>{
     if(!touched) return;
     touched = false;
+    if(suppressCellTap || touchPointer?.moved) return;
     e.preventDefault();
     handler(e);
   });
   el.addEventListener('click', e=>{
     if(touched){ touched = false; return; }
+    if(suppressCellTap) return;
     handler(e);
   });
 }
 
+function setupCalendarTouchGuard(calendarBody){
+  calendarBody.addEventListener('touchstart', e=>{
+    if(e.touches.length !== 1) return;
+    const t = e.touches[0];
+    touchPointer = { startX: t.clientX, startY: t.clientY, moved: false };
+    suppressCellTap = false;
+    if(!isWeekView() && !reassignState){
+      swipeStartX = t.clientX;
+      swipeStartY = t.clientY;
+    }
+  }, {passive:true, capture:true});
+
+  calendarBody.addEventListener('touchmove', e=>{
+    if(!touchPointer || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - touchPointer.startX);
+    const dy = Math.abs(t.clientY - touchPointer.startY);
+    if(dx > 10 || dy > 10){
+      touchPointer.moved = true;
+      suppressCellTap = true;
+    }
+    if(!isWeekView() && swipeStartX !== null){
+      const sdx = Math.abs(t.clientX - swipeStartX);
+      const sdy = Math.abs(t.clientY - swipeStartY);
+      if(sdx > 12 || sdy > 12) suppressCellTap = true;
+    }
+  }, {passive:true, capture:true});
+
+  calendarBody.addEventListener('touchend', e=>{
+    const moved = touchPointer?.moved;
+    if(moved) suppressCellTap = true;
+
+    if(!isWeekView() && swipeStartX !== null && !reassignState){
+      const t = e.changedTouches[0];
+      const dx = t.clientX - swipeStartX;
+      const dy = Math.abs(t.clientY - swipeStartY);
+      if(Math.abs(dx) > 55 && dy < 80){
+        suppressCellTap = true;
+        if(dx < 0) nextPeriod(); else prevPeriod();
+      }
+    }
+
+    swipeStartX = null;
+    touchPointer = null;
+    if(moved){
+      setTimeout(()=>{ suppressCellTap = false; }, 150);
+    }
+  }, {passive:true, capture:true});
+
+  calendarBody.addEventListener('touchcancel', ()=>{
+    touchPointer = null;
+    swipeStartX = null;
+    setTimeout(()=>{ suppressCellTap = false; }, 100);
+  }, {passive:true, capture:true});
+}
+
 function reportHeight(){
-  const h = Math.max(
-    document.documentElement.scrollHeight,
-    document.documentElement.clientHeight,
-    window.innerHeight
-  );
+  const h = (isMobile() && isWeekView())
+    ? window.innerHeight
+    : Math.max(
+        document.documentElement.scrollHeight,
+        document.documentElement.clientHeight,
+        window.innerHeight
+      );
   try { window.parent.postMessage({type:'planner-resize', height:h}, '*'); } catch(e){}
 }
 
@@ -995,31 +1066,8 @@ function bindEvents(){
   });
 
   const calendarBody = document.querySelector('.calendar-body');
+  setupCalendarTouchGuard(calendarBody);
   calendarBody.addEventListener('scroll', onWeekScroll, {passive:true});
-  calendarBody.addEventListener('touchstart', e=>{
-    if(e.touches.length!==1 || reassignState || isWeekView()) return;
-    swipeStartX = e.touches[0].clientX;
-    swipeStartY = e.touches[0].clientY;
-    suppressCellTap = false;
-  }, {passive:true});
-  calendarBody.addEventListener('touchmove', e=>{
-    if(swipeStartX===null || reassignState || isWeekView()) return;
-    const dx = Math.abs(e.touches[0].clientX - swipeStartX);
-    const dy = Math.abs(e.touches[0].clientY - swipeStartY);
-    if(dx > 12 || dy > 12) suppressCellTap = true;
-  }, {passive:true});
-  calendarBody.addEventListener('touchend', e=>{
-    if(swipeStartX===null || reassignState || isWeekView()) { swipeStartX=null; return; }
-    const t = e.changedTouches[0];
-    const dx = t.clientX - swipeStartX;
-    const dy = Math.abs(t.clientY - swipeStartY);
-    if(Math.abs(dx)>55 && dy<80){
-      suppressCellTap = true;
-      if(dx<0) nextPeriod(); else prevPeriod();
-    }
-    swipeStartX = null;
-    setTimeout(()=>{ suppressCellTap = false; }, 80);
-  }, {passive:true});
 
   let panelSwipeY = null;
   const panelEl = document.querySelector('.panel');

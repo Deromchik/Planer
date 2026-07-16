@@ -13,29 +13,31 @@
 </head>
 <body>
 <div class="app">
-  <div class="topbar">
-    <div class="month-nav">
-      <button type="button" id="prevBtn" title="Попередній місяць">‹</button>
-      <h1 id="monthTitle">— <span class="year">—</span></h1>
-      <button type="button" id="nextBtn" title="Наступний місяць">›</button>
-    </div>
-    <div class="actions">
-      <div class="view-toggle mobile-only" id="viewToggle">
-        <button type="button" class="view-btn active" data-view="week">Тиждень</button>
-        <button type="button" class="view-btn" data-view="month">Місяць</button>
+  <header class="app-header">
+    <div class="topbar">
+      <div class="month-nav">
+        <button type="button" id="prevBtn" title="Попередній місяць">‹</button>
+        <h1 id="monthTitle">— <span class="year">—</span></h1>
+        <button type="button" id="nextBtn" title="Наступний місяць">›</button>
       </div>
-      <button type="button" class="theme-btn" id="themeBtn" title="Колір календаря">
-        <span class="theme-btn-dot" id="themeBtnDot"></span>
-        Тема
-      </button>
-      <span class="save-status" id="saveStatus">Збережено</span>
-      <button type="button" class="pill-btn" id="todayBtn">Сьогодні</button>
+      <div class="actions">
+        <div class="view-toggle mobile-only" id="viewToggle">
+          <button type="button" class="view-btn active" data-view="week">Тиждень</button>
+          <button type="button" class="view-btn" data-view="month">Місяць</button>
+        </div>
+        <button type="button" class="theme-btn" id="themeBtn" title="Колір календаря">
+          <span class="theme-btn-dot" id="themeBtnDot"></span>
+          Тема
+        </button>
+        <span class="save-status" id="saveStatus">Збережено</span>
+        <button type="button" class="pill-btn" id="todayBtn">Сьогодні</button>
+      </div>
     </div>
-  </div>
-  <div class="reassign-bar" id="reassignBar">
-    <span class="reassign-text" id="reassignText"></span>
-    <button type="button" class="reassign-cancel" id="reassignCancel">Скасувати</button>
-  </div>
+    <div class="reassign-bar" id="reassignBar">
+      <span class="reassign-text" id="reassignText"></span>
+      <button type="button" class="reassign-cancel" id="reassignCancel">Скасувати</button>
+    </div>
+  </header>
   <div class="calendar-body">
     <div class="weekdays">
       <div>ПН</div><div>ВТ</div><div>СР</div><div>ЧТ</div><div>ПТ</div><div>СБ</div><div>НД</div>
