@@ -257,16 +257,17 @@
     }
     .save-status{font-size:10px;}
 
-    .weekdays div{font-size:10px;padding:5px 0;}
+    .weekdays div{font-size:10px;padding:6px 0;}
     .grid{
-      grid-template-rows:repeat(var(--weeks,5), minmax(52px, 1fr));
+      /* Cells are taller on mobile so content is readable and tap targets are comfortable */
+      grid-template-rows:repeat(var(--weeks,5), minmax(90px, 1fr));
     }
     .calendar-body{overflow-y:auto;-webkit-overflow-scrolling:touch;}
-    .cell{padding:3px 2px;}
-    .cell .datenum{font-size:11px;margin-bottom:2px;}
+    .cell{padding:5px 4px;}
+    .cell .datenum{font-size:13px;margin-bottom:4px;}
     .cell-item{
-      font-size:9px;padding:3px 4px;border-radius:2px;
-      min-height:18px;line-height:1.2;
+      font-size:11px;padding:4px 6px;border-radius:4px;
+      min-height:24px;line-height:1.3;
     }
 
     .overlay{align-items:flex-end;justify-content:center;}
@@ -304,6 +305,19 @@
     .color-pop-swatches{width:auto;justify-content:center;}
     .color-pop .swatch{width:32px;height:32px;}
   }
+
+  /* ── touch drag ghost (mobile only) ── */
+  .touch-ghost{
+    position:fixed;z-index:500;pointer-events:none;
+    padding:6px 10px;border-radius:6px;
+    font-family:'Inter',sans-serif;font-size:13px;font-weight:500;
+    white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;
+    box-shadow:0 6px 24px rgba(0,0,0,.5);
+    opacity:.9;transform:scale(1.08) rotate(-2deg);
+    transition:transform .1s;
+    display:none;
+  }
+  .touch-ghost.active{display:block;}
 
   @media(max-width:380px){
     h1{font-size:18px;}
@@ -390,6 +404,7 @@ let currentThemeBg  = THEME_COLORS[0];
 // попап кольору item: контекст поточного відкритого
 let colorPopCtx     = null; // {item, y, m, d, dotEl, rowEl}
 let touchDrag       = null;
+let touchGhost      = null;
 let swipeStartX     = null;
 let swipeStartY     = null;
 
@@ -708,6 +723,29 @@ function closeColorPop(){
 }
 
 /* ───────────── touch drag (mobile) ───────────── */
+function createTouchGhost(item){
+  if(touchGhost) touchGhost.remove();
+  touchGhost = document.createElement('div');
+  touchGhost.className = 'touch-ghost';
+  touchGhost.textContent = item.text;
+  touchGhost.style.background = item.color || ITEM_COLORS[0];
+  touchGhost.style.color = textOnBg(item.color || ITEM_COLORS[0]);
+  document.body.appendChild(touchGhost);
+}
+
+function moveTouchGhost(clientX, clientY){
+  if(!touchGhost) return;
+  touchGhost.classList.add('active');
+  const w = touchGhost.offsetWidth;
+  const h = touchGhost.offsetHeight;
+  touchGhost.style.left = Math.min(clientX - w/2, window.innerWidth - w - 8) + 'px';
+  touchGhost.style.top  = (clientY - h - 18) + 'px';
+}
+
+function removeTouchGhost(){
+  if(touchGhost){ touchGhost.remove(); touchGhost = null; }
+}
+
 function clearDropTargets(){
   document.querySelectorAll('.drop-target').forEach(n=>n.classList.remove('drop-target'));
 }
@@ -747,10 +785,15 @@ function setupTouchDrag(el, item, fromKey){
     const t = e.touches[0];
     const dx = Math.abs(t.clientX - touchDrag.startX);
     const dy = Math.abs(t.clientY - touchDrag.startY);
-    if(dx>10 || dy>10){
+    if(!touchDrag.moved && (dx>10 || dy>10)){
       touchDrag.moved = true;
       dragState = { fromKey, itemId:item.id };
       el.classList.add('dragging');
+      // show ghost only on mobile
+      if(isMobile()) createTouchGhost(item);
+    }
+    if(touchDrag.moved){
+      if(isMobile()) moveTouchGhost(t.clientX, t.clientY);
       highlightCellAt(t.clientX, t.clientY);
       e.preventDefault();
     }
@@ -760,6 +803,7 @@ function setupTouchDrag(el, item, fromKey){
     if(!touchDrag || touchDrag.itemId!==item.id) return;
     const t = e.changedTouches[0];
     el.classList.remove('dragging');
+    removeTouchGhost();
     if(touchDrag.moved) finishTouchDrag(t.clientX, t.clientY);
     clearDropTargets();
     touchDrag = null;
@@ -768,6 +812,7 @@ function setupTouchDrag(el, item, fromKey){
 
   el.addEventListener('touchcancel', ()=>{
     el.classList.remove('dragging');
+    removeTouchGhost();
     clearDropTargets();
     touchDrag = null;
     dragState = null;
