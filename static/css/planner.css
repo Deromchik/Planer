@@ -311,18 +311,32 @@ h1 .year{color:var(--muted);font-weight:500;}
   .save-status{font-size:10px;}
 
   .weekdays div{font-size:10px;padding:6px 0;}
+  .calendar-body{overflow-y:auto;-webkit-overflow-scrolling:touch;}
   .grid{
-    grid-template-rows:repeat(var(--weeks,5), minmax(90px, 1fr));
+    flex:none;
+    align-content:start;
+    grid-template-rows:repeat(var(--weeks,5), auto);
   }
   .grid.week-view{
-    grid-template-rows:minmax(120px, 1fr);
+    grid-template-rows:auto;
   }
-  .calendar-body{overflow-y:auto;-webkit-overflow-scrolling:touch;}
-  .cell{padding:5px 4px;}
-  .cell .datenum{font-size:13px;margin-bottom:4px;}
+  .cell{
+    aspect-ratio:1;
+    min-height:0;
+    height:auto;
+    padding:4px 3px;
+  }
+  .cell .datenum{font-size:11px;margin-bottom:2px;}
+  .cell-items{gap:1px;}
   .cell-item{
-    font-size:11px;padding:4px 6px;border-radius:4px;
-    min-height:24px;line-height:1.3;touch-action:manipulation;
+    font-size:9px;padding:2px 3px;border-radius:3px;
+    min-height:0;line-height:1.2;touch-action:manipulation;
+    white-space:normal;
+    overflow:hidden;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    text-overflow:ellipsis;
   }
 
   .reassign-bar{padding:12px 14px calc(10px + env(safe-area-inset-bottom));}
@@ -365,6 +379,7 @@ h1 .year{color:var(--muted);font-weight:500;}
   h1{font-size:18px;}
   .month-nav{gap:8px;}
   .actions{flex-wrap:wrap;}
-  .cell-item{font-size:8px;}
+  .cell .datenum{font-size:10px;}
+  .cell-item{font-size:8px;-webkit-line-clamp:2;}
   .weekdays div{font-size:9px;letter-spacing:0;}
 }
