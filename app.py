@@ -23,7 +23,7 @@ def get_secrets() -> dict:
 
 def supabase_load(url: str, key: str, row_id: str) -> dict:
     """Завантажити дані з Supabase або повернути дефолт."""
-    default = {"theme": {"bg": "#1B2027"}, "months": {}}
+    default = {"theme": {"bg": "#1B2027"}, "months": {}, "recurring": [], "recurringDone": {}}
     if not url or not key:
         return default
 
@@ -34,7 +34,7 @@ def supabase_load(url: str, key: str, row_id: str) -> dict:
     try:
         res = requests.get(
             f"{url}/rest/v1/planner_store",
-            params={"id": f"eq.{row_id}", "select": "theme,months"},
+            params={"id": f"eq.{row_id}", "select": "theme,months,recurring,recurring_done"},
             headers=headers,
             timeout=10,
         )
@@ -45,12 +45,15 @@ def supabase_load(url: str, key: str, row_id: str) -> dict:
                 return {
                     "theme": row.get("theme") or default["theme"],
                     "months": row.get("months") or {},
+                    "recurring": row.get("recurring") or [],
+                    "recurringDone": row.get("recurring_done") or {},
                 }
         # Якщо запису немає — створити
         requests.post(
             f"{url}/rest/v1/planner_store",
             headers={**headers, "Content-Type": "application/json", "Prefer": "return=minimal"},
-            json={"id": row_id, "theme": default["theme"], "months": {}},
+            json={"id": row_id, "theme": default["theme"], "months": {},
+                  "recurring": [], "recurring_done": {}},
             timeout=10,
         )
     except Exception as e:

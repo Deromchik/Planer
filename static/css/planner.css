@@ -234,6 +234,79 @@ h1 .year{color:var(--muted);font-weight:500;}
 }
 .empty-note{color:var(--muted);font-size:13px;padding:8px 0;}
 
+/* ── recurring ── */
+.cell-item.cell-item-recurring{cursor:default;pointer-events:none;opacity:.82;font-style:italic;}
+
+.recurring-section{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;}
+.recurring-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.recurring-header-title{
+  font-size:11px;font-family:'IBM Plex Mono',monospace;
+  color:var(--muted);letter-spacing:.5px;
+}
+.add-recurring-btn{
+  background:var(--panel);border:1px solid var(--line);color:var(--ink);
+  width:28px;height:28px;border-radius:50%;cursor:pointer;
+  font-size:18px;font-family:'Inter',sans-serif;
+  display:flex;align-items:center;justify-content:center;
+  transition:border-color .15s;line-height:1;
+  pointer-events:auto;touch-action:manipulation;
+}
+.add-recurring-btn:hover{border-color:var(--teal);}
+.recurring-item-row{border-left-color:var(--teal) !important;}
+.recurring-badge{font-size:13px;color:var(--teal);flex-shrink:0;}
+.rec-rule-label{font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;flex-shrink:0;white-space:nowrap;}
+
+.recurring-form{
+  background:rgba(0,0,0,.18);border:1px solid var(--line);
+  border-radius:8px;padding:12px;margin-top:8px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.rec-text-input{
+  background:var(--panel);border:1px solid var(--line);color:var(--ink);
+  padding:8px 10px;border-radius:4px;
+  font-family:'Inter',sans-serif;font-size:15px;width:100%;
+}
+.rec-text-input:focus{outline:none;border-color:var(--teal);}
+.rec-text-input.error{border-color:var(--coral);}
+.rec-type-row{display:flex;gap:6px;}
+.rec-type-btn{
+  flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
+  padding:7px;border-radius:4px;cursor:pointer;
+  font-family:'Inter',sans-serif;font-size:13px;transition:all .15s;
+  pointer-events:auto;touch-action:manipulation;
+}
+.rec-type-btn.active{border-color:var(--teal);color:var(--teal);background:rgba(79,143,130,.12);}
+.rec-days-row{display:flex;gap:4px;flex-wrap:wrap;}
+.rec-day-btn{
+  background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
+  width:34px;height:34px;border-radius:4px;cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;font-size:10px;
+  transition:all .15s;flex-shrink:0;
+  pointer-events:auto;touch-action:manipulation;
+}
+.rec-day-btn.active{border-color:var(--teal);color:var(--teal);background:rgba(79,143,130,.12);}
+.rec-dom-row input{
+  background:var(--panel);border:1px solid var(--line);color:var(--ink);
+  padding:8px 10px;border-radius:4px;
+  font-family:'IBM Plex Mono',monospace;font-size:15px;width:100%;
+}
+.rec-dom-row input:focus{outline:none;border-color:var(--teal);}
+.rec-color-row{display:flex;gap:6px;flex-wrap:wrap;}
+.rec-color-swatch{width:24px;height:24px;}
+.rec-form-actions{display:flex;gap:8px;}
+.rec-save-btn{
+  flex:1;background:var(--teal);border:none;color:#fff;
+  padding:9px;border-radius:4px;cursor:pointer;
+  font-family:'Inter',sans-serif;font-weight:600;font-size:14px;
+  pointer-events:auto;touch-action:manipulation;
+}
+.rec-cancel-btn{
+  background:var(--panel-2);border:1px solid var(--line);color:var(--muted);
+  padding:9px 16px;border-radius:4px;cursor:pointer;
+  font-family:'Inter',sans-serif;font-size:14px;
+  pointer-events:auto;touch-action:manipulation;
+}
+
 .mobile-only{display:none;}
 .view-toggle{
   display:flex;background:var(--panel);border:1px solid var(--line);
@@ -429,6 +502,11 @@ h1 .year{color:var(--muted);font-weight:500;}
   .color-pop{max-width:calc(100vw - 24px);padding:12px;}
   .color-pop-swatches{width:auto;justify-content:center;}
   .color-pop .swatch{width:32px;height:32px;}
+
+  .recurring-item-row{padding:10px 8px;gap:10px;min-height:48px;}
+  .rec-day-btn{width:38px;height:38px;font-size:11px;}
+  .rec-save-btn,.rec-cancel-btn{min-height:44px;font-size:15px;}
+  .rec-text-input{font-size:16px;min-height:44px;}
 }
 
 @media(max-width:380px){

@@ -387,6 +387,18 @@ function createCalendarCell(cellDate, isOutside){
     }
     wrap.appendChild(block);
   });
+  // recurring items
+  getRecurringForDay(cy, cm, dayNum).forEach(recItem => {
+    const block = document.createElement('div');
+    block.className = 'cell-item cell-item-recurring' + (recItem.done ? ' done' : '');
+    block.textContent = '↻ ' + recItem.text;
+    block.style.background = recItem.color || ITEM_COLORS[0];
+    block.style.color = textOnBg(recItem.color || ITEM_COLORS[0]);
+    block.title = recItem.text;
+    block.style.pointerEvents = 'none';
+    wrap.appendChild(block);
+  });
+
   cell.appendChild(wrap);
 
   bindTap(cell, ()=> activateCell(cellDate));
@@ -707,6 +719,53 @@ function getDayData(y,m,d){
   return md[dk];
 }
 
+/* ───────────── recurring helpers ───────────── */
+function dateStr(y, m, d) {
+  return y + '-' + pad(m + 1) + '-' + pad(d);
+}
+
+function recurringMatchesDay(rule, y, m, d) {
+  if (rule.type === 'weekly')  return new Date(y, m, d).getDay() === rule.value;
+  if (rule.type === 'monthly') return d === rule.value;
+  return false;
+}
+
+function getRecurringForDay(y, m, d) {
+  const rules = PlannerStorage.getRecurring();
+  const done  = PlannerStorage.getRecurringDone();
+  const ds    = dateStr(y, m, d);
+  return rules
+    .filter(r => recurringMatchesDay(r, y, m, d))
+    .map(r => ({ ...r, done: !!done[r.id + '_' + ds] }));
+}
+
+function toggleRecurringDone(ruleId, y, m, d, isDone) {
+  const done = { ...PlannerStorage.getRecurringDone() };
+  const key  = ruleId + '_' + dateStr(y, m, d);
+  if (isDone) done[key] = true;
+  else delete done[key];
+  PlannerStorage.setRecurringDone(done);
+  flashSaveStatus();
+}
+
+function deleteRecurringRule(ruleId) {
+  PlannerStorage.setRecurring(PlannerStorage.getRecurring().filter(r => r.id !== ruleId));
+  const done    = PlannerStorage.getRecurringDone();
+  const cleaned = {};
+  for (const k of Object.keys(done)) {
+    if (!k.startsWith(ruleId + '_')) cleaned[k] = done[k];
+  }
+  PlannerStorage.setRecurringDone(cleaned);
+  flashSaveStatus();
+}
+
+function addRecurringRule(text, color, type, value) {
+  const rules = [...PlannerStorage.getRecurring()];
+  rules.push({ id: uid(), text, color, type, value });
+  PlannerStorage.setRecurring(rules);
+  flashSaveStatus();
+}
+
 /* ───────────── drag / move ───────────── */
 function moveItem(fromKey,toKey,itemId,insertIdx){
   const fromDay=getDayData(fromKey.y,fromKey.m,fromKey.d);
@@ -879,9 +938,262 @@ function renderPanelContent(){
   if(!dd.items.length){
     const n=document.createElement('div');
     n.className='empty-note'; n.textContent='Записів на цей день ще немає.';
-    list.appendChild(n); return;
+    list.appendChild(n);
+  } else {
+    dd.items.forEach((item,i)=>list.appendChild(createItemRow(item,i,y,m,d)));
   }
-  dd.items.forEach((item,i)=>list.appendChild(createItemRow(item,i,y,m,d)));
+  renderRecurringSection(y,m,d);
+}
+
+/* ───────────── recurring panel section ───────────── */
+const REC_DAY_LABELS = ['нд','пн','вт','ср','чт','пт','сб'];
+const REC_DAY_SHORT  = ['НД','ПН','ВТ','СР','ЧТ','ПТ','СБ'];
+
+function recRuleLabel(rule){
+  if(rule.type === 'weekly')  return 'щo' + REC_DAY_LABELS[rule.value];
+  if(rule.type === 'monthly') return 'кожного ' + rule.value + '-го';
+  return '';
+}
+
+function renderRecurringSection(y, m, d){
+  const existing = document.getElementById('recurringSection');
+  if(existing) existing.remove();
+
+  const section = document.createElement('div');
+  section.id = 'recurringSection';
+  section.className = 'recurring-section';
+
+  // header
+  const header = document.createElement('div');
+  header.className = 'recurring-header';
+
+  const title = document.createElement('span');
+  title.className = 'recurring-header-title';
+  title.textContent = '↻ РЕГУЛЯРНІ';
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'add-recurring-btn';
+  addBtn.textContent = '+';
+  addBtn.title = 'Додати регулярний запис';
+  bindTap(addBtn, e => {
+    e.stopPropagation();
+    const form = document.getElementById('recurringForm');
+    if(form){ form.remove(); return; }
+    section.appendChild(buildRecurringForm(y, m, d, section));
+    document.getElementById('recurringFormText')?.focus();
+  });
+
+  header.append(title, addBtn);
+  section.appendChild(header);
+
+  // items list
+  const recItems = getRecurringForDay(y, m, d);
+  if(!recItems.length){
+    const note = document.createElement('div');
+    note.className = 'empty-note';
+    note.textContent = 'Немає регулярних на цей день.';
+    section.appendChild(note);
+  } else {
+    recItems.forEach(item => section.appendChild(createRecurringItemRow(item, y, m, d)));
+  }
+
+  document.querySelector('.panel').appendChild(section);
+}
+
+function createRecurringItemRow(item, y, m, d){
+  const row = document.createElement('div');
+  row.className = 'item-row recurring-item-row' + (item.done ? ' done' : '');
+  row.style.borderLeftColor = item.color || ITEM_COLORS[0];
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = item.done;
+  cb.addEventListener('change', () => {
+    toggleRecurringDone(item.id, y, m, d, cb.checked);
+    renderCalendar();
+    renderPanelContent();
+  });
+
+  const badge = document.createElement('span');
+  badge.className = 'recurring-badge';
+  badge.title = recRuleLabel(item);
+  badge.textContent = '↻';
+
+  const span = document.createElement('span');
+  span.className = 'item-text';
+  span.textContent = item.text;
+
+  const label = document.createElement('span');
+  label.className = 'rec-rule-label';
+  label.textContent = recRuleLabel(item);
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'del-btn';
+  del.textContent = '✕';
+  del.title = 'Видалити правило';
+  del.addEventListener('click', e => {
+    e.stopPropagation();
+    if(del.dataset.confirming === '1'){
+      deleteRecurringRule(item.id);
+      renderCalendar();
+      renderPanelContent();
+      return;
+    }
+    del.dataset.confirming = '1';
+    del.textContent = '?';
+    del.style.color = 'var(--coral)';
+    del.style.opacity = '1';
+    setTimeout(() => {
+      if(del.dataset.confirming === '1'){
+        delete del.dataset.confirming;
+        del.textContent = '✕';
+        del.style.color = '';
+        del.style.opacity = '';
+      }
+    }, 2500);
+  });
+
+  row.append(cb, badge, span, label, del);
+  return row;
+}
+
+function buildRecurringForm(y, m, d, section){
+  const form = document.createElement('div');
+  form.id = 'recurringForm';
+  form.className = 'recurring-form';
+
+  // text
+  const textInput = document.createElement('input');
+  textInput.id = 'recurringFormText';
+  textInput.type = 'text';
+  textInput.className = 'rec-text-input';
+  textInput.placeholder = 'Назва регулярного запису…';
+  textInput.autocomplete = 'off';
+  form.appendChild(textInput);
+
+  // type toggle
+  const typeRow = document.createElement('div');
+  typeRow.className = 'rec-type-row';
+  let currentType = 'weekly';
+
+  const weeklyBtn = document.createElement('button');
+  weeklyBtn.type = 'button';
+  weeklyBtn.className = 'rec-type-btn active';
+  weeklyBtn.textContent = 'Щотижня';
+
+  const monthlyBtn = document.createElement('button');
+  monthlyBtn.type = 'button';
+  monthlyBtn.className = 'rec-type-btn';
+  monthlyBtn.textContent = 'Щомісяця';
+
+  typeRow.append(weeklyBtn, monthlyBtn);
+  form.appendChild(typeRow);
+
+  // weekly day buttons — pre-select day of week for opened date
+  const daysRow = document.createElement('div');
+  daysRow.className = 'rec-days-row';
+  const currentDow = new Date(y, m, d).getDay();
+  let selectedDow   = currentDow;
+
+  REC_DAY_SHORT.forEach((name, jsDay) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rec-day-btn' + (jsDay === currentDow ? ' active' : '');
+    btn.textContent = name;
+    btn.addEventListener('click', () => {
+      selectedDow = jsDay;
+      daysRow.querySelectorAll('.rec-day-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    daysRow.appendChild(btn);
+  });
+  form.appendChild(daysRow);
+
+  // monthly day-of-month input — pre-select current day
+  const domRow = document.createElement('div');
+  domRow.className = 'rec-dom-row';
+  domRow.style.display = 'none';
+  const domInput = document.createElement('input');
+  domInput.type = 'number';
+  domInput.className = 'rec-dom-input';
+  domInput.min = 1;
+  domInput.max = 31;
+  domInput.value = d;
+  domInput.placeholder = 'День місяця (1–31)';
+  domRow.appendChild(domInput);
+  form.appendChild(domRow);
+
+  weeklyBtn.addEventListener('click', () => {
+    currentType = 'weekly';
+    weeklyBtn.classList.add('active');
+    monthlyBtn.classList.remove('active');
+    daysRow.style.display = 'flex';
+    domRow.style.display = 'none';
+  });
+  monthlyBtn.addEventListener('click', () => {
+    currentType = 'monthly';
+    monthlyBtn.classList.add('active');
+    weeklyBtn.classList.remove('active');
+    daysRow.style.display = 'none';
+    domRow.style.display = 'block';
+  });
+
+  // color row
+  let selectedColor = ITEM_COLORS[0];
+  const colorRow = document.createElement('div');
+  colorRow.className = 'rec-color-row';
+  ITEM_COLORS.forEach((color, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'swatch rec-color-swatch' + (i === 0 ? ' active' : '');
+    btn.style.background = color;
+    btn.title = color;
+    btn.addEventListener('click', () => {
+      selectedColor = color;
+      colorRow.querySelectorAll('.rec-color-swatch').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    colorRow.appendChild(btn);
+  });
+  form.appendChild(colorRow);
+
+  // actions
+  const actions = document.createElement('div');
+  actions.className = 'rec-form-actions';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'rec-save-btn';
+  saveBtn.textContent = 'Зберегти';
+  saveBtn.addEventListener('click', () => {
+    const text = textInput.value.trim();
+    if(!text){ textInput.focus(); textInput.classList.add('error'); return; }
+    const value = currentType === 'weekly'
+      ? selectedDow
+      : Math.min(31, Math.max(1, parseInt(domInput.value) || d));
+    addRecurringRule(text, selectedColor, currentType, value);
+    form.remove();
+    renderCalendar();
+    renderPanelContent();
+  });
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'rec-cancel-btn';
+  cancelBtn.textContent = 'Скасувати';
+  cancelBtn.addEventListener('click', () => form.remove());
+
+  actions.append(saveBtn, cancelBtn);
+  form.appendChild(actions);
+
+  textInput.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){ e.preventDefault(); saveBtn.click(); }
+    if(e.key === 'Escape'){ e.preventDefault(); form.remove(); }
+  });
+
+  return form;
 }
 
 function startItemTextEdit(item, textEl, y, m, d){

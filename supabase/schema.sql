@@ -5,8 +5,14 @@ create table if not exists planner_store (
   id text primary key default 'main',
   theme jsonb not null default '{"bg": "#1B2027"}'::jsonb,
   months jsonb not null default '{}'::jsonb,
+  recurring jsonb not null default '[]'::jsonb,
+  recurring_done jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+-- Додати нові колонки, якщо таблиця вже існує (міграція)
+alter table planner_store add column if not exists recurring jsonb not null default '[]'::jsonb;
+alter table planner_store add column if not exists recurring_done jsonb not null default '{}'::jsonb;
 
 -- Початковий запис
 insert into planner_store (id, theme, months)

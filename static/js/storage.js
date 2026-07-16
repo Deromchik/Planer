@@ -2,7 +2,7 @@
 const PlannerStorage = (() => {
   const DEFAULT_THEME = '#1B2027';
   let config = { supabaseUrl: null, supabaseKey: null, rowId: 'main' };
-  let data = { theme: { bg: DEFAULT_THEME }, months: {} };
+  let data = { theme: { bg: DEFAULT_THEME }, months: {}, recurring: [], recurringDone: {} };
   let saveTimer = null;
   let onSaved = null;
 
@@ -12,6 +12,8 @@ const PlannerStorage = (() => {
       data = {
         theme: initial.theme || { bg: DEFAULT_THEME },
         months: initial.months || {},
+        recurring: initial.recurring || [],
+        recurringDone: initial.recurringDone || {},
       };
     }
   }
@@ -38,6 +40,24 @@ const PlannerStorage = (() => {
     return data.months;
   }
 
+  function getRecurring() {
+    return data.recurring || [];
+  }
+
+  function setRecurring(rules) {
+    data.recurring = rules;
+    scheduleSave();
+  }
+
+  function getRecurringDone() {
+    return data.recurringDone || {};
+  }
+
+  function setRecurringDone(done) {
+    data.recurringDone = done;
+    scheduleSave();
+  }
+
   function scheduleSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => persist(), 300);
@@ -50,6 +70,8 @@ const PlannerStorage = (() => {
           id: config.rowId,
           theme: data.theme,
           months: data.months,
+          recurring: data.recurring || [],
+          recurring_done: data.recurringDone || {},
           updated_at: new Date().toISOString(),
         };
         const headers = {
@@ -94,6 +116,8 @@ const PlannerStorage = (() => {
         data = {
           theme: parsed.theme || { bg: DEFAULT_THEME },
           months: parsed.months || {},
+          recurring: parsed.recurring || [],
+          recurringDone: parsed.recurringDone || {},
         };
       }
     } catch (e) {
@@ -108,6 +132,10 @@ const PlannerStorage = (() => {
     getMonth,
     setMonth,
     getAllMonths,
+    getRecurring,
+    setRecurring,
+    getRecurringDone,
+    setRecurringDone,
     scheduleSave,
     persist,
     loadLocal,
