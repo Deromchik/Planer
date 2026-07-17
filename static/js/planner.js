@@ -1478,25 +1478,40 @@ function bindEvents(){
   PlannerStorage.setOnSaved(flashSaveStatus);
 }
 
+function reloadFromStorage(){
+  monthCache = {};
+  const allMonths = PlannerStorage.getAllMonths();
+  for(const k of Object.keys(allMonths)) monthCache[k] = migrateMonthData(allMonths[k]);
+  loadTheme();
+  renderCalendar();
+  if(selectedDateKey) renderPanelContent();
+  reportHeight();
+}
+
 /* ───────────── init ───────────── */
-function initPlanner(){
+async function initPlanner(){
   const cfg = window.__PLANNER_CONFIG__ || {};
   const initial = window.__PLANNER_DATA__ || null;
 
-  PlannerStorage.init({
+  await PlannerStorage.init({
     supabaseUrl: cfg.supabaseUrl || null,
     supabaseKey: cfg.supabaseKey || null,
     rowId: cfg.rowId || 'main',
   }, initial);
 
-  const allMonths = PlannerStorage.getAllMonths();
-  for(const k of Object.keys(allMonths)) monthCache[k] = migrateMonthData(allMonths[k]);
+  reloadFromStorage();
 
   bindEvents();
   setupVisualViewport();
-  loadTheme();
-  renderCalendar();
-  reportHeight();
+
+  PlannerStorage.setOnSynced(() => reloadFromStorage());
+
+  if(PlannerStorage.hasSupabase()){
+    document.addEventListener('visibilitychange', () => {
+      if(document.visibilityState === 'visible') PlannerStorage.syncFromRemote();
+    });
+    window.addEventListener('focus', () => PlannerStorage.syncFromRemote());
+  }
 }
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPlanner);

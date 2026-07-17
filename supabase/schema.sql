@@ -10,17 +10,22 @@ create table if not exists planner_store (
   updated_at timestamptz not null default now()
 );
 
--- Додати нові колонки, якщо таблиця вже існує (міграція)
+-- Міграція для існуючої таблиці
 alter table planner_store add column if not exists recurring jsonb not null default '[]'::jsonb;
 alter table planner_store add column if not exists recurring_done jsonb not null default '{}'::jsonb;
+alter table planner_store add column if not exists updated_at timestamptz not null default now();
 
 -- Початковий запис
 insert into planner_store (id, theme, months)
 values ('main', '{"bg": "#1B2027"}'::jsonb, '{}'::jsonb)
 on conflict (id) do nothing;
 
--- Дозволити anon read/write для одного рядка (особистий планер)
+-- RLS (безпечно перезапускати)
 alter table planner_store enable row level security;
+
+drop policy if exists "Allow anon read planner_store" on planner_store;
+drop policy if exists "Allow anon update planner_store" on planner_store;
+drop policy if exists "Allow anon insert planner_store" on planner_store;
 
 create policy "Allow anon read planner_store"
   on planner_store for select

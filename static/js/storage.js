@@ -1,13 +1,20 @@
-/* PlannerStorage — Supabase (production) + localStorage (local fallback) */
+/* PlannerStorage — Supabase (production) + localStorage (offline cache) */
 const PlannerStorage = (() => {
   const DEFAULT_THEME = '#1B2027';
   let config = { supabaseUrl: null, supabaseKey: null, rowId: 'main' };
   let data = defaultData();
+  let updatedAt = '';
   let saveTimer = null;
   let onSaved = null;
+  let onSynced = null;
+  let applyingRemote = false;
 
   function defaultData() {
     return { theme: { bg: DEFAULT_THEME }, months: {}, recurring: [], recurringDone: {} };
+  }
+
+  function hasSupabase() {
+    return !!(config.supabaseUrl && config.supabaseKey);
   }
 
   function normalizeData(raw) {
@@ -20,28 +27,29 @@ const PlannerStorage = (() => {
     };
   }
 
-  function hasStoredContent(d) {
-    return Object.keys(d.months || {}).length > 0 ||
-      (d.recurring || []).length > 0 ||
-      Object.keys(d.recurringDone || {}).length > 0 ||
-      (d.theme?.bg && d.theme.bg !== DEFAULT_THEME);
-  }
-
-  function mergeData(base, overlay) {
-    const a = normalizeData(base);
-    const b = normalizeData(overlay);
+  function parseSupabaseRow(row) {
+    if (!row) return null;
     return {
-      theme: b.theme?.bg && b.theme.bg !== DEFAULT_THEME ? b.theme : a.theme,
-      months: { ...a.months, ...b.months },
-      recurring: (b.recurring || []).length ? b.recurring : a.recurring,
-      recurringDone: { ...a.recurringDone, ...b.recurringDone },
+      data: normalizeData({
+        theme: row.theme,
+        months: row.months,
+        recurring: row.recurring,
+        recurringDone: row.recurring_done,
+      }),
+      updatedAt: row.updated_at || '',
     };
   }
 
-  function readLocalData() {
+  function readLocalCache() {
     try {
       const raw = localStorage.getItem('planner-data');
-      if (raw) return normalizeData(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          data: normalizeData(parsed),
+          updatedAt: parsed._updatedAt || '',
+        };
+      }
 
       // legacy: окремі ключі planner-month:YYYY-MM
       const months = {};
@@ -51,7 +59,7 @@ const PlannerStorage = (() => {
         const monthKey = key.slice('planner-month:'.length);
         try {
           months[monthKey] = JSON.parse(localStorage.getItem(key));
-        } catch (_) { /* skip bad entry */ }
+        } catch (_) { /* skip */ }
       }
       if (!Object.keys(months).length) return null;
 
@@ -64,27 +72,129 @@ const PlannerStorage = (() => {
         }
       } catch (_) { /* keep default */ }
 
-      return normalizeData({ theme, months });
+      return { data: normalizeData({ theme, months }), updatedAt: '' };
     } catch (e) {
       console.warn('localStorage load failed:', e);
       return null;
     }
   }
 
+  function applyData(next, nextUpdatedAt) {
+    applyingRemote = true;
+    data = normalizeData(next);
+    updatedAt = nextUpdatedAt || '';
+    applyingRemote = false;
+  }
+
+  function saveLocal() {
+    try {
+      localStorage.setItem('planner-data', JSON.stringify({
+        ...data,
+        _updatedAt: updatedAt,
+      }));
+    } catch (e) {
+      console.error('localStorage save failed:', e);
+    }
+  }
+
   function init(cfg, initial) {
     config = { ...config, ...cfg };
-    const local = readLocalData();
-    const remote = initial ? normalizeData(initial) : null;
 
-    if (local && remote && hasStoredContent(remote)) {
-      data = mergeData(remote, local);
-    } else if (local && hasStoredContent(local)) {
-      data = local;
-    } else if (remote) {
-      data = remote;
-    } else {
-      data = defaultData();
+    if (!hasSupabase()) {
+      const local = readLocalCache();
+      if (local) {
+        applyData(local.data, local.updatedAt);
+      } else if (initial) {
+        applyData(initial, '');
+      } else {
+        applyData(defaultData(), '');
+      }
+      return Promise.resolve(false);
     }
+
+    const local = readLocalCache();
+    const bootstrap = initial ? normalizeData(initial) : defaultData();
+    applyData(bootstrap, local?.updatedAt || '');
+
+    return reconcile(local);
+  }
+
+  async function fetchFromSupabase() {
+    const headers = {
+      apikey: config.supabaseKey,
+      Authorization: `Bearer ${config.supabaseKey}`,
+    };
+    const selects = [
+      'theme,months,recurring,recurring_done,updated_at',
+      'theme,months,updated_at',
+    ];
+    for (const select of selects) {
+      try {
+        const res = await fetch(
+          `${config.supabaseUrl}/rest/v1/planner_store?id=eq.${encodeURIComponent(config.rowId)}&select=${select}`,
+          { headers }
+        );
+        if (!res.ok) continue;
+        const rows = await res.json();
+        if (rows.length) return parseSupabaseRow(rows[0]);
+        return { data: defaultData(), updatedAt: '' };
+      } catch (e) {
+        console.warn('Supabase fetch failed:', e);
+      }
+    }
+    return null;
+  }
+
+  function isNewer(a, b) {
+    const ta = a ? new Date(a).getTime() : 0;
+    const tb = b ? new Date(b).getTime() : 0;
+    return ta > tb;
+  }
+
+  async function reconcile(localCache) {
+    const local = localCache || readLocalCache();
+    const remote = await fetchFromSupabase();
+
+    if (!remote) {
+      if (local) applyData(local.data, local.updatedAt);
+      saveLocal();
+      return false;
+    }
+
+    const localAt = local?.updatedAt || '';
+    const remoteAt = remote.updatedAt || '';
+
+    if (isNewer(remoteAt, localAt)) {
+      applyData(remote.data, remoteAt);
+      saveLocal();
+      return true;
+    }
+
+    if (isNewer(localAt, remoteAt)) {
+      applyData(local.data, localAt);
+      await persist();
+      return true;
+    }
+
+    applyData(remote.data, remoteAt);
+    saveLocal();
+    return false;
+  }
+
+  async function syncFromRemote() {
+    if (!hasSupabase()) return false;
+
+    const remote = await fetchFromSupabase();
+    if (!remote) return false;
+
+    const remoteAt = remote.updatedAt || '';
+    if (remoteAt && remoteAt === updatedAt) return false;
+    if (!isNewer(remoteAt, updatedAt)) return false;
+
+    applyData(remote.data, remoteAt);
+    saveLocal();
+    if (onSynced) onSynced();
+    return true;
   }
 
   function getThemeBg() {
@@ -128,16 +238,18 @@ const PlannerStorage = (() => {
   }
 
   function scheduleSave() {
+    if (applyingRemote) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => persist(), 300);
   }
 
   function supabasePayload(includeRecurring) {
+    updatedAt = new Date().toISOString();
     const payload = {
       id: config.rowId,
       theme: data.theme,
       months: data.months,
-      updated_at: new Date().toISOString(),
+      updated_at: updatedAt,
     };
     if (includeRecurring) {
       payload.recurring = data.recurring || [];
@@ -162,13 +274,20 @@ const PlannerStorage = (() => {
   }
 
   async function persist() {
+    if (!applyingRemote) {
+      updatedAt = new Date().toISOString();
+    }
     saveLocal();
 
-    if (config.supabaseUrl && config.supabaseKey) {
+    if (hasSupabase()) {
       try {
         let ok = await saveSupabase(true);
         if (!ok) ok = await saveSupabase(false);
-        if (!ok) console.error('Supabase save failed after retry');
+        if (!ok) {
+          console.error('Supabase save failed after retry');
+        } else {
+          saveLocal();
+        }
       } catch (e) {
         console.error('Supabase save error:', e);
       }
@@ -177,21 +296,10 @@ const PlannerStorage = (() => {
     if (onSaved) onSaved();
   }
 
-  function saveLocal() {
-    try {
-      localStorage.setItem('planner-data', JSON.stringify(data));
-    } catch (e) {
-      console.error('localStorage save failed:', e);
-    }
-  }
-
-  function loadLocal() {
-    const local = readLocalData();
-    if (local) data = local;
-  }
-
   return {
     init,
+    reconcile,
+    syncFromRemote,
     getThemeBg,
     setThemeBg,
     getMonth,
@@ -203,7 +311,8 @@ const PlannerStorage = (() => {
     setRecurringDone,
     scheduleSave,
     persist,
-    loadLocal,
+    hasSupabase,
     setOnSaved(fn) { onSaved = fn; },
+    setOnSynced(fn) { onSynced = fn; },
   };
 })();
